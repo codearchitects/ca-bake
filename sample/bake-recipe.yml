@@ -1,0 +1,28 @@
+version: 1
+name: ca-microservices
+
+# environment variables
+environment:
+  BAKE_CI: BAKE
+  BAKE_RUNNER_URL: https://raw.githubusercontent.com/codearchitects/ca-bake/master/bake-run.ps1
+  BAKE_BUILD_VERSION: 0.0.0
+  BAKE_BUILD_NUMBER: 123
+  BAKE_NUGET_FEED: https://xxxxxxx/xxxxxxx/api/nuget/xxxxxxx
+  BAKE_NUGET_FEED_API_KEY: 
+  BAKE_NUGET_USERNAME: 
+  BAKE_NUGET_PASSWORD: 
+
+# components
+components:
+  - name: CA.AspNetCore.Hosting.Abstractions
+    path: src\CA.AspNetCore.Hosting.Abstractions
+    type: dotnet-package
+    package: CA.AspNetCore.Hosting.Abstractions
+    packageDist: dist
+    packagePath: ca-foundation-microservices-aspnetcore-hosting-abstractions
+  - name: CA.AspNetCore.Hosting.Abstractions.UnitTest
+    path: test\CA.AspNetCore.Hosting.Abstractions.UnitTest
+    type: dotnet-test
+    package: 
+    packageDist: 
+    packagePath: 
