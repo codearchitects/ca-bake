@@ -5,4 +5,5 @@ if([string]::IsNullOrEmpty($urlFile))
 }
 Invoke-WebRequest $urlFile -OutFile bake-install.ps1
 .\bake-install.ps1
+Remove-Item bake-install.ps1
 .\bake-run.ps1 -step CI
