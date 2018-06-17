@@ -7,12 +7,11 @@ import-module psyaml
 $bannerText = @"
  ______        _                      
 (____  \      | |                     
- ____)  ) ____| |  _ ____  ____ _   _ 
-|  __  ( / _  | | / ) _  )/ ___) | | |
-| |__)  | ( | | |< ( (/ /| |   | |_| |
-|______/ \_||_|_| \_)____)_|    \__  |
-                               (____/ 
-                     by Code Architects
+ ____)  ) ____| |  _ ____
+|  __  ( / _  | | / ) _  )
+| |__)  | ( | | |< ( (/ /
+|______/ \_||_|_| \_)____)
+        by Code Architects
 
 "@
 
@@ -138,7 +137,7 @@ Class Recipe
     {
         $ciEnv = [Environment]::GetEnvironmentVariable("BAKE_CI")
         $envValue = [Environment]::GetEnvironmentVariable($envKey)
-        if($ciEnv -eq "TRUE" -or [string]::IsNullOrEmpty($envValue))
+        if($ciEnv -eq "BAKE" -or [string]::IsNullOrEmpty($envValue))
         {
             $envValue = $this.environment[$envKey]
         }
