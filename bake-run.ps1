@@ -100,7 +100,6 @@ Function LoadRecipe()
         $components = $components + $component
     }
     $recipe.components = $components
-    $environment = @()
     $recipe.environment = @{}
     $envItems = $yaml["environment"]
     foreach($key in $envItems.Keys) 
