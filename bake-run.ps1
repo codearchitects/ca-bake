@@ -304,7 +304,7 @@ if($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "SETUP")
 {
     Setup($recipe)
 }
-if($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") 
+if($step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") 
 {
     Build($recipe)
 }
