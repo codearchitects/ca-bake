@@ -296,15 +296,15 @@ PrintBanner
 $recipe = LoadRecipe
 PrintStep "Loaded recipe: $($recipe.name)"
 
-if($step -eq "CI" -or $step -eq "RC" -or $step -eq "CLEAN") 
+if($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "CLEAN") 
 {
     Clean($recipe)
 }
-if($step -eq "CI" -or $step -eq "RC" -or $step -eq "SETUP") 
+if($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "SETUP") 
 {
     Setup($recipe)
 }
-if($step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") 
+if($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") 
 {
     Build($recipe)
 }
