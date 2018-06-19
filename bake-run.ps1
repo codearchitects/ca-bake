@@ -228,7 +228,7 @@ Function Pack([Recipe] $recipe) {
             PrintAction "Packing $($component.name)..."
             $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
-            dotnet pack /p:Version=$version, PackageVersion=$version --no-dependencies --force -c Release --output $distPath
+            dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
             PrintAction "Popping location"
             Pop-Location
         }
@@ -246,8 +246,10 @@ Function Publish([Recipe] $recipe) {
             Push-Location $path
             PrintAction "Publishing $($_)..."
             $version = $recipe.GetVersion()
+            $package = "$($component.package).$($version).nupkg"
             $source = "$($recipe.GetNugetFeed())/$($component.packagePath)"
-            dotnet nuget push CAFoundation.AspNetCore.Hosting.Abstractions.$version.nupkg -k $recipe.GetNugetFeedApiKey() -s $source
+            Write-Host "Publishing package $($package)"
+            dotnet nuget push $package -k $recipe.GetNugetFeedApiKey() -s $source
             PrintAction "Popping location"
             Pop-Location
         }
