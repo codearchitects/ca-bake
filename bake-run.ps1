@@ -183,7 +183,7 @@ Function Clean([Recipe] $recipe) {
 
 Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
-    PathNugetFile "NuGet.Config" "cafoundation" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
+    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Created Nuget.Config temporary file"
     foreach ($component in $recipe.components) {
         PrintAction "Restoring component $($component.name)"
