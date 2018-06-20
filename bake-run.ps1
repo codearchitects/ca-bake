@@ -90,6 +90,14 @@ Function LoadRecipe() {
         $component.packageDist = $item["packageDist"]
         $component.packagePath = $item["packagePath"]
         $component.package = $item["package"]
+        $component.secrets = @()
+        foreach ($items2 in $item["secrets"]) 
+        {
+            $secretItem = New-Object Secret
+            $secretItem.name = $items2["name"]
+            $secretItem.items = $items2["items"]
+            $component.secrets = $component.secrets + $secretItem
+        }
         $components = $components + $component
     }
     $recipe.components = $components
@@ -109,10 +117,20 @@ Class Component {
     [string]$packageDist
     [string]$package
     [string]$packagePath
+    [Secret[]]$secrets
 
     [boolean] IsDotNetPackage() {
         return $this.type -eq "dotnet-package"
     }
+
+    [boolean] IsDotNetApp() {
+        return $this.type -eq "dotnet-container"
+    }
+}
+
+Class Secret {
+    [string]$name
+    [Hashtable]$items
 }
 
 Class Recipe {
@@ -257,6 +275,40 @@ Function Publish([Recipe] $recipe) {
     PrintStep "Completed the PUBLISH step"
 }
 
+Function SetupBox([Recipe] $recipe) {
+    PrintStep "Started the SETUPBOX step"
+    foreach ($component in $recipe.components) {
+        if ($component.IsDotNetApp()) {
+            PrintAction "SETUPBOX for the component $($component.name)"
+            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            dotnet user-secrets clear
+            foreach($secret in $component.secrets) 
+            {
+                foreach ($key in $secret.items.Keys) 
+                {
+                    $secretKey = $secret.name +':' + $key
+                    Write-Host $secretKey -ForegroundColor DarkGreen
+                    $input = $secret.items[$key]
+                    if (-not ([string]::IsNullOrEmpty($input)))
+                    {
+                        Write-Host $input
+                    }
+                    else
+                    {
+                        $input = Read-Host
+                    }
+                    dotnet user-secrets set $secretKey $input
+                }
+            }
+            PrintAction "Popping location"
+            Pop-Location
+        }
+    }
+    PrintStep "Completed the SETUPBOX step"
+}
+
 if ([string]::IsNullOrEmpty($step)) {
     return 
 }
@@ -278,4 +330,7 @@ if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "PACK") {
 }
 if ($step -eq "RC" -or $step -eq "PUBLISH") {
     Publish($recipe)
+}
+if ($step -eq "SETUPBOX") {
+    SetupBox($recipe)
 }
