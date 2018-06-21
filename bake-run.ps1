@@ -27,10 +27,6 @@ Function PrintAction([string] $text) {
     Write-Host "> $($text)" -ForegroundColor Green
 }
 
-Function PrintError([string] $text) {
-    Write-Error -Message "$($text)"
-}
-
 Function PathNugetFile([string] $file, [string] $feedName, [string] $useraname, [string] $pass) {
     $xml = [xml](Get-Content $file)
 
