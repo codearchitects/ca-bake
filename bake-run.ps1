@@ -188,6 +188,8 @@ Class Recipe {
 # Build Steps
 
 Function Clean([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the CLEAN step"
     foreach ($component in $recipe.components) {
         PrintAction "Cleaning component $($component.name)"
@@ -197,13 +199,25 @@ Function Clean([Recipe] $recipe) {
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Building $($vsProjectFile)..."
         dotnet clean $vsProjectFile
+        if ($LastExitCode -ne 0) {
+            $error = $true
+            $errorMessage = "Failed to clean $($component.name)"
+        }
         PrintAction "Popping location"
-        Pop-Location        
+        Pop-Location     
+        if ($error) {
+            break
+        }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the CLEAN step"
 }
 
 Function Setup([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Created Nuget.Config temporary file"
@@ -215,15 +229,27 @@ Function Setup([Recipe] $recipe) {
         PrintAction "Restoring $($component.name)..."
         $configFile = Join-Path $PSScriptRoot NuGet.Config.Temp
         dotnet restore --force --configfile $configFile
+        if ($LastExitCode -ne 0) {
+            $error = $true
+            $errorMessage = "Failed to restore $($component.name)"
+        }
         PrintAction "Popping location"
         Pop-Location
+        if ($error) {
+            break
+        }
     }
     Remove-Item NuGet.Config.Temp
+    if ($error) {
+        Write-Error "$($errorMessage)"
+    }
     PrintStep "Delete Nuget.Config temporary file"
     PrintStep "Completed the SETUP step"
 }
 
 Function Build([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the BUILD step"
     foreach ($component in $recipe.components) {
         PrintAction "Building component $($component.name)"
@@ -233,13 +259,25 @@ Function Build([Recipe] $recipe) {
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Building $($vsProjectFile)..."
         dotnet build $vsProjectFile --no-restore
+        if ($LastExitCode -ne 0) {
+            $error = $true
+            $errorMessage = "Failed to build $($component.name)"
+        }
         PrintAction "Popping location"
         Pop-Location
+        if ($error) {
+            break
+        }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the BUILD step"
 }
 
 Function Pack([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the PACK step"
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetPackage()) {
@@ -251,14 +289,26 @@ Function Pack([Recipe] $recipe) {
             $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
+            if ($LastExitCode -ne 0) {
+                $error = $true
+                $errorMessage = "Failed to pack $($component.name)"
+            }
             PrintAction "Popping location"
             Pop-Location
+            if ($error) {
+                break
+            }
         }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the PACK step"
 }
 
 Function Publish([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetPackage()) {
@@ -272,14 +322,26 @@ Function Publish([Recipe] $recipe) {
             $source = "$($recipe.GetNugetFeed())/$($component.packagePath)"
             Write-Host "Publishing package $($package)"
             dotnet nuget push $package -k $recipe.GetNugetFeedApiKey() -s $source
+            if ($LastExitCode -ne 0) {
+                $error = $true
+                $errorMessage = "Failed to publish $($component.name)"
+            }
             PrintAction "Popping location"
             Pop-Location
+            if ($error) {
+                break
+            }
         }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the PUBLISH step"
 }
 
 Function SetupBox([Recipe] $recipe) {
+    $error = false
+    $errorMessage = ""
     PrintStep "Started the SETUPBOX step"
     foreach ($component in $recipe.components) {
         if (($component.IsDotNetApp()) -or ($component.IsDotNetTest())) {
@@ -288,27 +350,46 @@ Function SetupBox([Recipe] $recipe) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             dotnet user-secrets clear
-            foreach($secret in $component.secrets) 
-            {
-                foreach ($key in $secret.items.Keys) 
+            if ($LastExitCode -ne 0) {
+                $error = $true
+                $errorMessage = "Failed to clear user secrets $($component.name)"
+            }
+            if (-neq $exit) {
+                foreach($secret in $component.secrets) 
                 {
-                    $secretKey = $secret.name +':' + $key
-                    Write-Host $secretKey -ForegroundColor DarkGreen
-                    $input = $secret.items[$key]
-                    if (-not ([string]::IsNullOrEmpty($input)))
+                    foreach ($key in $secret.items.Keys) 
                     {
-                        Write-Host $input
+                        $secretKey = $secret.name +':' + $key
+                        Write-Host $secretKey -ForegroundColor DarkGreen
+                        $input = $secret.items[$key]
+                        if (-not ([string]::IsNullOrEmpty($input))) {
+                            Write-Host $input
+                        } else  {
+                            $input = Read-Host
+                        }
+                        dotnet user-secrets set $secretKey $input
+                        if ($LastExitCode -ne 0) {
+                            $error = $true
+                            $errorMessage = "Failed to setup box $($component.name)"
+                        }
+                        if ($error) {
+                            break
+                        }
                     }
-                    else
-                    {
-                        $input = Read-Host
+                    if ($error) {
+                        break
                     }
-                    dotnet user-secrets set $secretKey $input
                 }
             }
             PrintAction "Popping location"
             Pop-Location
+            if ($error) {
+                break
+            }
         }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the SETUPBOX step"
 }
