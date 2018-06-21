@@ -123,8 +123,12 @@ Class Component {
         return $this.type -eq "dotnet-package"
     }
 
+    [boolean] IsDotNetTest() {
+        return ($this.type -eq "dotnet-test")
+    }
+
     [boolean] IsDotNetApp() {
-        return $this.type -eq "dotnet-container"
+        return (($this.type -eq "dotnet-container") -or ($this.type -eq "dotnet-app"))
     }
 }
 
@@ -278,7 +282,7 @@ Function Publish([Recipe] $recipe) {
 Function SetupBox([Recipe] $recipe) {
     PrintStep "Started the SETUPBOX step"
     foreach ($component in $recipe.components) {
-        if ($component.IsDotNetApp()) {
+        if (($component.IsDotNetApp()) -or ($component.IsDotNetTest())) {
             PrintAction "SETUPBOX for the component $($component.name)"
             $path = Join-Path $PSScriptRoot ("\" + $component.path)
             PrintAction "Pushing location $($path)"
