@@ -188,7 +188,7 @@ Class Recipe {
 # Build Steps
 
 Function Clean([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the CLEAN step"
     foreach ($component in $recipe.components) {
@@ -216,7 +216,7 @@ Function Clean([Recipe] $recipe) {
 }
 
 Function Setup([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
@@ -248,7 +248,7 @@ Function Setup([Recipe] $recipe) {
 }
 
 Function Build([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the BUILD step"
     foreach ($component in $recipe.components) {
@@ -276,7 +276,7 @@ Function Build([Recipe] $recipe) {
 }
 
 Function Pack([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the PACK step"
     foreach ($component in $recipe.components) {
@@ -307,7 +307,7 @@ Function Pack([Recipe] $recipe) {
 }
 
 Function Publish([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
@@ -340,7 +340,7 @@ Function Publish([Recipe] $recipe) {
 }
 
 Function SetupBox([Recipe] $recipe) {
-    $error = false
+    $error = $false
     $errorMessage = ""
     PrintStep "Started the SETUPBOX step"
     foreach ($component in $recipe.components) {
