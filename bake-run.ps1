@@ -197,7 +197,7 @@ Function Clean([Recipe] $recipe) {
         PrintAction "Pushing location $($path)"
         Push-Location $path
         $vsProjectFile = "$($component.name).csproj"
-        PrintAction "Building $($vsProjectFile)..."
+        PrintAction "Cleaning $($vsProjectFile)..."
         dotnet clean $vsProjectFile
         if ($LastExitCode -ne 0) {
             $error = $true
