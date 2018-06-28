@@ -353,34 +353,34 @@ Function SetupBox([Recipe] $recipe) {
             if ($LastExitCode -ne 0) {
                 $error = $true
                 $errorMessage = "Failed to clear user secrets $($component.name)"
-            }
-            if (-neq $exit) {
-                foreach($secret in $component.secrets) 
+            } else {
+              foreach($secret in $component.secrets) 
                 {
-                    foreach ($key in $secret.items.Keys) 
-                    {
-                        $secretKey = $secret.name +':' + $key
-                        Write-Host $secretKey -ForegroundColor DarkGreen
-                        $input = $secret.items[$key]
-                        if (-not ([string]::IsNullOrEmpty($input))) {
-                            Write-Host $input
-                        } else  {
-                            $input = Read-Host
-                        }
-                        dotnet user-secrets set $secretKey $input
-                        if ($LastExitCode -ne 0) {
-                            $error = $true
-                            $errorMessage = "Failed to setup box $($component.name)"
-                        }
-                        if ($error) {
-                            break
-                        }
-                    }
-                    if ($error) {
-                        break
-                    }
+                  foreach ($key in $secret.items.Keys) 
+                  {
+                      $secretKey = $secret.name +':' + $key
+                      Write-Host $secretKey -ForegroundColor DarkGreen
+                      $input = $secret.items[$key]
+                      if (-not ([string]::IsNullOrEmpty($input))) {
+                          Write-Host $input
+                      } else  {
+                          $input = Read-Host
+                      }
+                      dotnet user-secrets set $secretKey $input
+                      if ($LastExitCode -ne 0) {
+                          $error = $true
+                          $errorMessage = "Failed to setup box $($component.name)"
+                      }
+                      if ($error) {
+                          break
+                      }
+                  }
+                  if ($error) {
+                      break
+                  }
                 }
             }
+
             PrintAction "Popping location"
             Pop-Location
             if ($error) {
