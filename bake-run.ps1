@@ -5,8 +5,8 @@ import-module psyaml
 # Functions
 
 $bannerText = @"
- ______        _                      
-(____  \      | |                     
+ ______        _
+(____  \      | |
  ____)  ) ____| |  _ ____
 |  __  ( / _  | | / ) _  )
 | |__)  | ( | | |< ( (/ /
@@ -31,7 +31,7 @@ Function PathNugetFile([string] $file, [string] $feedName, [string] $useraname, 
     $xml = [xml](Get-Content $file)
 
     # intention is to have
-    
+
     # <configuration>
     #    <packageSourceCredentials>
     #        <feedName>
@@ -40,35 +40,35 @@ Function PathNugetFile([string] $file, [string] $feedName, [string] $useraname, 
     #        </feedName>
     #    </packageSourceCredentials>
     # </configuration>
-    
-    
+
+
     # create the username node and set the attributes
     $userNameNode = $xml.CreateElement("add")
     $userNameNode.SetAttribute("key", "Username")
     $userNameNode.SetAttribute("value", $useraname)
-    
+
     # create the password node and set the attributes
     $passwordNode = $xml.CreateElement("add")
     $passwordNode.SetAttribute("key", "ClearTextPassword")
     $passwordNode.SetAttribute("value", $pass)
-    
+
     # create the feedName node and attach the username and password nodes
     $feedNameNode = $xml.CreateElement($feedName)
     [void] $feedNameNode.AppendChild($userNameNode)
     [void] $feedNameNode.AppendChild($passwordNode)
-    
+
     # create the packageSourceCredentials node and append the feedName node
     $credentialsNode = $xml.CreateElement("packageSourceCredentials")
     [void] $credentialsNode.AppendChild($feedNameNode);
-    
+
     # add the packageSourceCredentials node to the document's configuration node
     $xml.configuration.AppendChild($credentialsNode);
-    
+
     # save the file to the same location
     $xml.Save("$pwd\" + $file + ".Temp")
 }
 
-Function LoadYaml ($filePath) { 
+Function LoadYaml ($filePath) {
     [string[]]$fileContent = Get-Content $filePath
     $content = ''
     foreach ($line in $fileContent) { $content = $content + "`n" + $line }
@@ -76,7 +76,7 @@ Function LoadYaml ($filePath) {
     return $yaml
 }
 
-Function LoadRecipe() { 
+Function LoadRecipe() {
     $yaml = LoadYaml(".\bake-recipe.yml")
     $recipe = New-Object Recipe
     $recipe.version = $yaml["version"]
@@ -91,8 +91,7 @@ Function LoadRecipe() {
         $component.packagePath = $item["packagePath"]
         $component.package = $item["package"]
         $component.secrets = @()
-        foreach ($items2 in $item["secrets"]) 
-        {
+        foreach ($items2 in $item["secrets"]) {
             $secretItem = New-Object Secret
             $secretItem.name = $items2["name"]
             $secretItem.items = $items2["items"]
@@ -204,7 +203,7 @@ Function Clean([Recipe] $recipe) {
             $errorMessage = "Failed to clean $($component.name)"
         }
         PrintAction "Popping location"
-        Pop-Location     
+        Pop-Location
         if ($error) {
             break
         }
@@ -353,31 +352,31 @@ Function SetupBox([Recipe] $recipe) {
             if ($LastExitCode -ne 0) {
                 $error = $true
                 $errorMessage = "Failed to clear user secrets $($component.name)"
-            } else {
-              foreach($secret in $component.secrets) 
-                {
-                  foreach ($key in $secret.items.Keys) 
-                  {
-                      $secretKey = $secret.name +':' + $key
-                      Write-Host $secretKey -ForegroundColor DarkGreen
-                      $input = $secret.items[$key]
-                      if (-not ([string]::IsNullOrEmpty($input))) {
-                          Write-Host $input
-                      } else  {
-                          $input = Read-Host
-                      }
-                      dotnet user-secrets set $secretKey $input
-                      if ($LastExitCode -ne 0) {
-                          $error = $true
-                          $errorMessage = "Failed to setup box $($component.name)"
-                      }
-                      if ($error) {
-                          break
-                      }
-                  }
-                  if ($error) {
-                      break
-                  }
+            }
+            else {
+                foreach ($secret in $component.secrets) {
+                    foreach ($key in $secret.items.Keys) {
+                        $secretKey = $secret.name + ':' + $key
+                        Write-Host $secretKey -ForegroundColor DarkGreen
+                        $input = $secret.items[$key]
+                        if (-not ([string]::IsNullOrEmpty($input))) {
+                            Write-Host $input
+                        }
+                        else {
+                            $input = Read-Host
+                        }
+                        dotnet user-secrets set $secretKey $input
+                        if ($LastExitCode -ne 0) {
+                            $error = $true
+                            $errorMessage = "Failed to setup box $($component.name)"
+                        }
+                        if ($error) {
+                            break
+                        }
+                    }
+                    if ($error) {
+                        break
+                    }
                 }
             }
 
@@ -395,7 +394,7 @@ Function SetupBox([Recipe] $recipe) {
 }
 
 if ([string]::IsNullOrEmpty($step)) {
-    return 
+    return
 }
 PrintBanner
 $recipe = LoadRecipe
