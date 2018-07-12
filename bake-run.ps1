@@ -204,9 +204,7 @@ Function Clean([Recipe] $recipe) {
         }
         PrintAction "Popping location"
         Pop-Location
-        if ($error) {
-            break
-        }
+        if ($error) {break}
     }
     if ($error) {
         Write-Error "$($errorMessage)"
@@ -234,9 +232,7 @@ Function Setup([Recipe] $recipe) {
         }
         PrintAction "Popping location"
         Pop-Location
-        if ($error) {
-            break
-        }
+        if ($error) {break}
     }
     Remove-Item NuGet.Config.Temp
     if ($error) {
@@ -264,14 +260,40 @@ Function Build([Recipe] $recipe) {
         }
         PrintAction "Popping location"
         Pop-Location
-        if ($error) {
-            break
-        }
+        if ($error) {break}
     }
     if ($error) {
         Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the BUILD step"
+}
+
+Function Test([Recipe] $recipe) {
+    $error = $false
+    $errorMessage = ""
+    PrintStep "Started the TEST step"
+    foreach ($component in $recipe.components) {
+        if ($component.IsDotNetTest()) {
+            PrintAction "Testing component $($component.name)"
+            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            $vsProjectFile = "$($component.name).csproj"
+            PrintAction "Testing $($vsProjectFile)..."
+            dotnet test $vsProjectFile
+            if ($LastExitCode -ne 0) {
+                $error = $true
+                $errorMessage = "Failed to test $($component.name)"
+            }
+            PrintAction "Popping location"
+            Pop-Location
+            if ($error) {break}
+        }
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
+    }
+    PrintStep "Completed the TEST step"
 }
 
 Function Pack([Recipe] $recipe) {
@@ -294,9 +316,7 @@ Function Pack([Recipe] $recipe) {
             }
             PrintAction "Popping location"
             Pop-Location
-            if ($error) {
-                break
-            }
+            if ($error) {break}
         }
     }
     if ($error) {
@@ -327,9 +347,7 @@ Function Publish([Recipe] $recipe) {
             }
             PrintAction "Popping location"
             Pop-Location
-            if ($error) {
-                break
-            }
+            if ($error) {break}
         }
     }
     if ($error) {
@@ -370,21 +388,14 @@ Function SetupBox([Recipe] $recipe) {
                             $error = $true
                             $errorMessage = "Failed to setup box $($component.name)"
                         }
-                        if ($error) {
-                            break
-                        }
+                        if ($error) {break}
                     }
-                    if ($error) {
-                        break
-                    }
+                    if ($error) {break}
                 }
             }
-
             PrintAction "Popping location"
             Pop-Location
-            if ($error) {
-                break
-            }
+            if ($error) {break}
         }
     }
     if ($error) {
@@ -408,6 +419,9 @@ if ($step -eq "CODE" -or $step -eq "CI" -or $step -eq "RC" -or $step -eq "SETUP"
 }
 if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") {
     Build($recipe)
+}
+if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "TEST") {
+    Test($recipe)
 }
 if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "PACK") {
     Pack($recipe)
