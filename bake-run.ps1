@@ -127,7 +127,7 @@ Class Component {
     }
 
     [boolean] IsDotNetApp() {
-        return (($this.type -eq "dotnet-container") -or ($this.type -eq "dotnet-app"))
+        return (($this.type -eq "dotnet-app") -or ($this.type -eq "dotnet-app"))
     }
 }
 
