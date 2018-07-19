@@ -123,11 +123,11 @@ Class Component {
     }
 
     [boolean] IsDotNetTest() {
-        return ($this.type -eq "dotnet-test")
+        return $this.type -eq "dotnet-test"
     }
 
     [boolean] IsDotNetApp() {
-        return (($this.type -eq "dotnet-container") -or ($this.type -eq "dotnet-app"))
+        return $this.type -eq "dotnet-app"
     }
 }
 
