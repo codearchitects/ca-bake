@@ -27,7 +27,16 @@ Function PrintAction([string] $text) {
     Write-Host "> $($text)" -ForegroundColor Green
 }
 
-Function PathNugetFile([string] $file, [string] $feedName, [string] $useraname, [string] $pass) {
+Function PathNugetFile([switch] $logout, [string] $file, [string] $feedName, [string] $useraname, [string] $pass) {
+    if ($logout) {
+        Remove-Item "NuGet.Config"
+        Copy-Item -Path "NuGet.Config.original" -Destination "NuGet.Config" -Force
+        Remove-Item "NuGet.Config.original"
+        return
+    }
+
+    Copy-Item -Path $file -Destination "$file.original"
+
     $xml = [xml](Get-Content $file)
 
     # intention is to have
@@ -65,7 +74,24 @@ Function PathNugetFile([string] $file, [string] $feedName, [string] $useraname, 
     $xml.configuration.AppendChild($credentialsNode);
 
     # save the file to the same location
-    $xml.Save("$pwd\" + $file + ".Temp")
+    $xml.Save("$pwd\" + $file)
+}
+
+Function SetupDocker ([switch]$logout) {
+    if ($logout) {
+        docker logout $Env:JFROG_DOCKER_LOCAL
+        return
+    }
+    docker login $Env:JFROG_DOCKER_LOCAL -u="$Env:DOCKER_USERNAME" -p="$Env:DOCKER_PASSWORD"
+}
+
+Function CheckDockerStart ([switch]$logout) {
+    $pathDockerForWindows = "C:\Program Files\Docker\Docker\Docker for Windows.exe"
+    if (!(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
+        Write-Host "Docker is off, I'm starting it now..." -ForegroundColor Yellow
+        if (-not (Test-Path env:IS_CI)) { & $pathDockerForWindows }
+        do {docker ps 2>&1>$null; Start-Sleep 3} while ($lastexitcode -ne 0)
+    }
 }
 
 Function LoadYaml ($filePath) {
@@ -202,7 +228,6 @@ Function Clean([Recipe] $recipe) {
             $error = $true
             $errorMessage = "Failed to clean $($component.name)"
         }
-        PrintAction "Popping location"
         Pop-Location
         if ($error) {break}
     }
@@ -217,55 +242,65 @@ Function Setup([Recipe] $recipe) {
     $errorMessage = ""
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
-    PrintStep "Created Nuget.Config temporary file"
     foreach ($component in $recipe.components) {
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot ("\" + $component.path)
         PrintAction "Pushing location $($path)"
         Push-Location $path
         PrintAction "Restoring $($component.name)..."
-        $configFile = Join-Path $PSScriptRoot NuGet.Config.Temp
+        $configFile = Join-Path $PSScriptRoot NuGet.Config
         dotnet restore --force --configfile $configFile
         if ($LastExitCode -ne 0) {
             $error = $true
             $errorMessage = "Failed to restore $($component.name)"
         }
-        PrintAction "Popping location"
         Pop-Location
         if ($error) {break}
     }
-    Remove-Item NuGet.Config.Temp
+    PathNugetFile -logout
     if ($error) {
         Write-Error "$($errorMessage)"
     }
-    PrintStep "Delete Nuget.Config temporary file"
     PrintStep "Completed the SETUP step"
 }
 
 Function Build([Recipe] $recipe) {
     $error = $false
     $errorMessage = ""
+    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Started the BUILD step"
     foreach ($component in $recipe.components) {
-        PrintAction "Building component $($component.name)"
-        $path = Join-Path $PSScriptRoot ("\" + $component.path)
-        PrintAction "Pushing location $($path)"
-        Push-Location $path
-        $vsProjectFile = "$($component.name).csproj"
-        PrintAction "Building $($vsProjectFile)..."
-        dotnet build $vsProjectFile --no-restore
+        if ($component.IsDotNetPackage()) {
+            PrintAction "Building $($component.type) component $($component.name)"
+            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            $vsProjectFile = "$($component.name).csproj"
+            PrintAction "Building $($vsProjectFile)..."
+            dotnet build $vsProjectFile --no-restore
+            Pop-Location
+        }
+        elseif ($component.IsDotNetApp()) {
+            PrintAction "Building $($component.type) component $($component.name)"
+            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            PrintAction "Building $($component.name) in Docker..."
+            CheckDockerStart
+            docker-compose build
+            Pop-Location
+        }
         if ($LastExitCode -ne 0) {
             $error = $true
             $errorMessage = "Failed to build $($component.name)"
         }
-        PrintAction "Popping location"
-        Pop-Location
         if ($error) {break}
     }
     if ($error) {
         Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the BUILD step"
+    PathNugetFile -logout
 }
 
 Function Test([Recipe] $recipe) {
@@ -285,7 +320,6 @@ Function Test([Recipe] $recipe) {
                 $error = $true
                 $errorMessage = "Failed to test $($component.name)"
             }
-            PrintAction "Popping location"
             Pop-Location
             if ($error) {break}
         }
@@ -314,7 +348,6 @@ Function Pack([Recipe] $recipe) {
                 $error = $true
                 $errorMessage = "Failed to pack $($component.name)"
             }
-            PrintAction "Popping location"
             Pop-Location
             if ($error) {break}
         }
@@ -331,27 +364,33 @@ Function Publish([Recipe] $recipe) {
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetPackage()) {
-            PrintAction "Pushing component $($component.name)"
+            PrintAction "Pushing $($component.type) component $($component.name)"
             $path = Join-Path $PSScriptRoot ("\" + $component.packageDist)
             PrintAction "Pushing location $($path)"
             Push-Location $path
-            PrintAction "Publishing $($_)..."
             $version = $recipe.GetVersion()
             $package = "$($component.package).$($version).nupkg"
             $source = "$($recipe.GetNugetFeed())/$($component.packagePath)"
             Write-Host "Publishing package $($package)"
             dotnet nuget push $package -k $recipe.GetNugetFeedApiKey() -s $source
-            if ($LastExitCode -ne 0) {
-                $error = $true
-                $errorMessage = "Failed to publish $($component.name)"
-            }
-            PrintAction "Popping location"
             Pop-Location
-            if ($error) {break}
         }
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
+        elseif ($component.IsDotNetApp()) {
+            PrintAction "Pushing $($component.type) component $($component.name)"
+            SetupDocker
+            $imageName = $($component.name).ToLower().Trim()
+            docker tag $imageName":latest" $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
+            docker push $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
+            SetupDocker -logout
+        }
+        if ($LastExitCode -ne 0) {
+            $error = $true
+            $errorMessage = "Failed to publish $($component.name)"
+        }
+        if ($error) {
+            Write-Error "$($errorMessage)"
+        }
+        if ($error) {break}
     }
     PrintStep "Completed the PUBLISH step"
 }
@@ -393,7 +432,6 @@ Function SetupBox([Recipe] $recipe) {
                     if ($error) {break}
                 }
             }
-            PrintAction "Popping location"
             Pop-Location
             if ($error) {break}
         }
