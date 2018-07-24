@@ -74,7 +74,7 @@ Function PathNugetFile([switch] $logout, [string] $file, [string] $feedName, [st
     $xml.configuration.AppendChild($credentialsNode);
 
     # save the file to the same location
-    $xml.Save("$pwd\" + $file)
+    $xml.Save((Join-Path $pwd $file))
 }
 
 Function SetupDocker ([switch]$logout) {
