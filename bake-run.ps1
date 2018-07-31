@@ -87,7 +87,7 @@ Function SetupDocker ([switch]$logout) {
 
 Function CheckDockerStart ([switch]$logout) {
     $pathDockerForWindows = "C:\Program Files\Docker\Docker\Docker for Windows.exe"
-    if (!(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
+    if (Get-Command Get-WmiObject -errorAction SilentlyContinue -and !(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
         Write-Host "Docker is off, I'm starting it now..." -ForegroundColor Yellow
         if (-not (Test-Path env:IS_CI)) { & $pathDockerForWindows }
         do {docker ps 2>&1>$null; Start-Sleep 3} while ($lastexitcode -ne 0)
