@@ -287,7 +287,7 @@ Function Build([Recipe] $recipe) {
             Push-Location $path
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
-            docker-compose ($null, {'--log-level ERROR'})[(Test-Path env:IS_CI)] build $($component.name).ToLower().Trim()
+            docker-compose build $($component.name).ToLower().Trim()
             Pop-Location
         }
         if ($LastExitCode -ne 0) {
