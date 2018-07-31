@@ -87,7 +87,7 @@ Function SetupDocker ([switch]$logout) {
 
 Function CheckDockerStart ([switch]$logout) {
     $pathDockerForWindows = "C:\Program Files\Docker\Docker\Docker for Windows.exe"
-    if (Get-Command Get-WmiObject -errorAction SilentlyContinue -and !(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
+    if ((Get-Command Get-WmiObject -errorAction SilentlyContinue) -and !(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
         Write-Host "Docker is off, I'm starting it now..." -ForegroundColor Yellow
         if (-not (Test-Path env:IS_CI)) { & $pathDockerForWindows }
         do {docker ps 2>&1>$null; Start-Sleep 3} while ($lastexitcode -ne 0)
@@ -284,11 +284,10 @@ Function Build([Recipe] $recipe) {
             PrintAction "Building $($component.type) component $($component.name)"
             $path = Join-Path $PSScriptRoot ("\" + $component.path)
             PrintAction "Pushing location $($path)"
-            Push-Location $path
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
-            docker-compose build $($component.name).ToLower().Trim()
-            Pop-Location
+            $componentName = $($component.name).ToLower().Trim()
+            if (Test-Path env:IS_CI) { docker-compose -f docker-compose.yml build $componentName } else { docker-compose build $componentName }
         }
         if ($LastExitCode -ne 0) {
             $error = $true
