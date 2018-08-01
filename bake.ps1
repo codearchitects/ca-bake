@@ -243,6 +243,7 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
+        if ($component.IsDotNetApp()) { continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot ("\" + $component.path)
         PrintAction "Pushing location $($path)"
