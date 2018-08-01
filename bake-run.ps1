@@ -85,7 +85,7 @@ Function SetupDocker ([switch]$logout) {
     docker login $Env:JFROG_DOCKER_LOCAL -u="$Env:DOCKER_USERNAME" -p="$Env:DOCKER_PASSWORD"
 }
 
-Function CheckDockerStart ([switch]$logout) {
+Function CheckDockerStart () {
     $pathDockerForWindows = "C:\Program Files\Docker\Docker\Docker for Windows.exe"
     if ((Get-Command Get-WmiObject -errorAction SilentlyContinue) -and !(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
         Write-Host "Docker is off, I'm starting it now..." -ForegroundColor Yellow
@@ -441,6 +441,43 @@ Function SetupBox([Recipe] $recipe) {
     PrintStep "Completed the SETUPBOX step"
 }
 
+Function docker.start ([Recipe] $recipe) {
+    $error = $false
+    $errorMessage = ""
+    PrintStep "Started the DOCKER.START step"
+    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
+    CheckDockerStart
+    Write-Host "I'm starting all project's containers..." -ForegroundColor Yellow
+    if (Test-Path env:IS_CI) {
+        docker-compose -f docker-compose.yml --log-level ERROR up -d --remove-orphans 
+    } else {
+        docker-compose up -d --remove-orphans 
+    }
+    PathNugetFile -logout
+    if ($error) { Write-Error "$($errorMessage)" }
+    PrintStep "Completed the DOCKER.START step"
+}
+
+Function docker.stop () {
+    $error = $false
+    $errorMessage = ""
+    PrintStep "Started the DOCKER.STOP step"
+    Write-Host "I'm stopping all project's containers..." -ForegroundColor Yellow
+    if (Test-Path env:IS_CI) {
+        docker-compose -f docker-compose.yml --log-level ERROR down; docker rm $(docker ps -aq) -f
+    } else {
+        docker-compose down
+    }
+    if ($error) { Write-Error "$($errorMessage)" }
+    PrintStep "Completed the DOCKER.STOP step"
+}
+
+Function docker.clean () {
+    docker system prune -f
+    docker volume prune -f
+    docker network prune -f
+}
+
 if ([string]::IsNullOrEmpty($step)) {
     return
 }
@@ -466,6 +503,7 @@ if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "PACK") {
 if ($step -eq "RC" -or $step -eq "PUBLISH") {
     Publish($recipe)
 }
-if ($step -eq "SETUPBOX") {
-    SetupBox($recipe)
-}
+if ($step -eq "SETUPBOX") { SetupBox($recipe) }
+if ($step -eq "DOCKER.START") { docker.start($recipe) }
+if ($step -eq "DOCKER.STOP") { docker.stop }
+if ($step -eq "DOCKER.CLEAN") { docker.clean }
