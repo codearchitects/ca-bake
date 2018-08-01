@@ -1,4 +1,4 @@
-Invoke-WebRequest https://raw.githubusercontent.com/codearchitects/ca-bake/master/bake-run.ps1 -OutFile "bake-run.ps1"
+Invoke-WebRequest https://raw.githubusercontent.com/codearchitects/ca-bake/master/bake.ps1 -OutFile "bake.ps1"
 if (Get-Module -ListAvailable -Name psyaml) {
     Write-Host "Module psyaml exists"
 } else {
@@ -7,3 +7,4 @@ if (Get-Module -ListAvailable -Name psyaml) {
     Install-Module -force -Scope CurrentUser psyaml -AllowClobber
     Write-Host "Installed psyaml module"
 }
+Remove-Item ".\bake-run.ps1" -Force -ErrorAction SilentlyContinue

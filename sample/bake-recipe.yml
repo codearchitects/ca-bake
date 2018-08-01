@@ -4,7 +4,7 @@ name: ca-microservices
 # environment variables
 environment:
   BAKE_CI: BAKE
-  BAKE_RUNNER_URL: https://raw.githubusercontent.com/codearchitects/ca-bake/master/bake-run.ps1
+  BAKE_RUNNER_URL: https://raw.githubusercontent.com/codearchitects/ca-bake/master/bake.ps1
   BAKE_BUILD_VERSION: 0.0.0
   BAKE_BUILD_NUMBER: 123
   BAKE_NUGET_FEED: https://xxxxxxx/xxxxxxx/api/nuget/xxxxxxx
