@@ -286,8 +286,7 @@ Function Build([Recipe] $recipe) {
             PrintAction "Pushing location $($path)"
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
-            $componentName = $($component.name).ToLower().Trim()
-            if (Test-Path env:IS_CI) { docker-compose -f docker-compose.yml build $componentName } else { docker-compose build $componentName }
+            docker build -f $path"\Dockerfile" .
         }
         if ($LastExitCode -ne 0) {
             $error = $true
@@ -450,7 +449,8 @@ Function docker.start ([Recipe] $recipe) {
     Write-Host "I'm starting all project's containers..." -ForegroundColor Yellow
     if (Test-Path env:IS_CI) {
         docker-compose -f docker-compose.yml --log-level ERROR up -d --remove-orphans 
-    } else {
+    }
+    else {
         docker-compose up -d --remove-orphans 
     }
     PathNugetFile -logout
@@ -465,7 +465,8 @@ Function docker.stop () {
     Write-Host "I'm stopping all project's containers..." -ForegroundColor Yellow
     if (Test-Path env:IS_CI) {
         docker-compose -f docker-compose.yml --log-level ERROR down; docker rm $(docker ps -aq) -f
-    } else {
+    }
+    else {
         docker-compose down
     }
     if ($error) { Write-Error "$($errorMessage)" }
