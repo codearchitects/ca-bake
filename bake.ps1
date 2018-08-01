@@ -463,12 +463,8 @@ Function docker.stop () {
     $errorMessage = ""
     PrintStep "Started the DOCKER.STOP step"
     Write-Host "I'm stopping all project's containers..." -ForegroundColor Yellow
-    if (Test-Path env:IS_CI) {
-        docker-compose -f docker-compose.yml --log-level ERROR down; docker rm $(docker ps -aq) -f
-    }
-    else {
-        docker-compose down
-    }
+    if (Test-Path env:IS_CI) { docker-compose -f docker-compose.yml --log-level ERROR down } else { docker-compose down }
+    if (docker ps -aq) { docker rm $(docker ps -aq) -f }
     if ($error) { Write-Error "$($errorMessage)" }
     PrintStep "Completed the DOCKER.STOP step"
 }
