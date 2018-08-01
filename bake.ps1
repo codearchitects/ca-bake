@@ -283,7 +283,7 @@ Function Build([Recipe] $recipe) {
         elseif ($component.IsDotNetApp()) {
             PrintAction "Building $($component.type) component $($component.name)"
             $path = Join-Path $PSScriptRoot ("\" + $component.path)
-            $DockerfilePath = Join-Path $path ("\" + "Dockerfile")
+            $DockerfilePath = Join-Path $path "Dockerfile"
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
             docker build -f $DockerfilePath .
