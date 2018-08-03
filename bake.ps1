@@ -349,6 +349,7 @@ Function Pack([Recipe] $recipe) {
             $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
+            Pop-Location
         }
         elseif ($component.IsDotNetMigrationDbUp()) {
             $source = Join-Path $component.path $component.sourcePath
@@ -357,12 +358,12 @@ Function Pack([Recipe] $recipe) {
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
         }
-        if ($LastExitCode -ne 0) {
-            $error = $true
-            $errorMessage = "Failed to pack $($component.name)"
-        }
-        Pop-Location
-        if ($error) {break}
+        # TEMP
+        # if ($LastExitCode -ne 0) {
+        #     $error = $true
+        #     $errorMessage = "Failed to pack $($component.name)"
+        # }
+        # if ($error) {break}
     }
     if ($error) {
         Write-Error "$($errorMessage)"
