@@ -115,6 +115,7 @@ Function LoadRecipe() {
         $component.type = $item["type"]
         $component.packageDist = $item["packageDist"]
         $component.packagePath = $item["packagePath"]
+        $component.sourcePath = $item["sourcePath"]
         $component.package = $item["package"]
         $component.secrets = @()
         foreach ($items2 in $item["secrets"]) {
@@ -140,6 +141,7 @@ Class Component {
     [string]$path
     [string]$type
     [string]$packageDist
+    [string]$sourcePath
     [string]$package
     [string]$packagePath
     [Secret[]]$secrets
@@ -154,6 +156,10 @@ Class Component {
 
     [boolean] IsDotNetApp() {
         return $this.type -eq "dotnet-app"
+    }
+
+    [boolean] IsDotNetMigrationDbUp() {
+        return $this.type -eq "dotnet-migration-dbup"
     }
 }
 
@@ -218,7 +224,7 @@ Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
     foreach ($component in $recipe.components) {
         PrintAction "Cleaning component $($component.name)"
-        $path = Join-Path $PSScriptRoot ("\" + $component.path)
+        $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
         Push-Location $path
         $vsProjectFile = "$($component.name).csproj"
@@ -243,9 +249,11 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
+
         if ($component.IsDotNetApp()) { continue }
+
         PrintAction "Restoring component $($component.name)"
-        $path = Join-Path $PSScriptRoot ("\" + $component.path)
+        $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
         Push-Location $path
         PrintAction "Restoring $($component.name)..."
@@ -271,19 +279,17 @@ Function Build([Recipe] $recipe) {
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Started the BUILD step"
     foreach ($component in $recipe.components) {
-        if ($component.IsDotNetPackage()) {
-            PrintAction "Building $($component.type) component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+        PrintAction "Building $($component.type) component $($component.name)"
+        $path = Join-Path $PSScriptRoot $component.path
+        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
             PrintAction "Building $($vsProjectFile)..."
-            dotnet build $vsProjectFile --no-restore
+            dotnet build $vsProjectFile --no-restore --configuration Release
             Pop-Location
         }
         elseif ($component.IsDotNetApp()) {
-            PrintAction "Building $($component.type) component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.path)
             $DockerfilePath = Join-Path $path "Dockerfile"
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
@@ -309,7 +315,7 @@ Function Test([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetTest()) {
             PrintAction "Testing component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
@@ -334,22 +340,29 @@ Function Pack([Recipe] $recipe) {
     $errorMessage = ""
     PrintStep "Started the PACK step"
     foreach ($component in $recipe.components) {
+        PrintAction "Packing component $($component.name)"
+        $path = Join-Path $PSScriptRoot $component.path
         if ($component.IsDotNetPackage()) {
-            PrintAction "Packing component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.path)
             PrintAction "Pushing location $($path)"
             Push-Location $path
             PrintAction "Packing $($component.name)..."
             $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
-            if ($LastExitCode -ne 0) {
-                $error = $true
-                $errorMessage = "Failed to pack $($component.name)"
-            }
-            Pop-Location
-            if ($error) {break}
         }
+        elseif ($component.IsDotNetMigrationDbUp()) {
+            $source = Join-Path $component.path $component.sourcePath
+            $destination = Join-Path $component.packageDist ($component.name + ".latest.zip")
+            if (-not (Test-path $component.packageDist)) { new-item -Name $component.packageDist -ItemType directory }
+            if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
+            Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
+        }
+        if ($LastExitCode -ne 0) {
+            $error = $true
+            $errorMessage = "Failed to pack $($component.name)"
+        }
+        Pop-Location
+        if ($error) {break}
     }
     if ($error) {
         Write-Error "$($errorMessage)"
@@ -362,9 +375,9 @@ Function Publish([Recipe] $recipe) {
     $errorMessage = ""
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
+        PrintAction "Pushing $($component.type) component $($component.name)"
+        $path = Join-Path $PSScriptRoot $component.packageDist
         if ($component.IsDotNetPackage()) {
-            PrintAction "Pushing $($component.type) component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.packageDist)
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $version = $recipe.GetVersion()
@@ -375,22 +388,26 @@ Function Publish([Recipe] $recipe) {
             Pop-Location
         }
         elseif ($component.IsDotNetApp()) {
-            PrintAction "Pushing $($component.type) component $($component.name)"
             SetupDocker
             $imageName = $($component.name).ToLower().Trim()
             docker tag $imageName":latest" $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
             docker push $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
             SetupDocker -logout
         }
-        if ($LastExitCode -ne 0) {
-            $error = $true
-            $errorMessage = "Failed to publish $($component.name)"
+        elseif ($component.IsDotNetMigrationDbUp()) {
+            $file = Join-Path $component.packageDist ($component.name + ".latest.zip")
+            $fileName = $component.name + ".latest.zip"
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -TimeoutSec 9200 -UseBasicParsing -Uri (New-Object System.Uri ($Env:BAKE_ARTIFACTS_REPO_URI + $component.name + "/" + $fileName)) -InFile $file -Method Put -Credential (New-Object System.Management.Automation.PSCredential ($Env:BAKE_NUGET_USERNAME), (ConvertTo-SecureString ($Env:BAKE_NUGET_PASSWORD) -AsPlainText -Force))
         }
-        if ($error) {
-            Write-Error "$($errorMessage)"
-        }
-        if ($error) {break}
     }
+    if ($LastExitCode -ne 0) {
+        $error = $true
+        $errorMessage = "Failed to publish $($component.name)"
+    }
+    if ($error) {
+        Write-Error "$($errorMessage)"
+    }
+    if ($error) {break}
     PrintStep "Completed the PUBLISH step"
 }
 
