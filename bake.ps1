@@ -1,5 +1,7 @@
 param($step)
 
+$ErrorActionPreference = "Stop"
+
 import-module psyaml
 
 # Functions
@@ -219,8 +221,6 @@ Class Recipe {
 # Build Steps
 
 Function Clean([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the CLEAN step"
     foreach ($component in $recipe.components) {
         PrintAction "Cleaning component $($component.name)"
@@ -230,22 +230,12 @@ Function Clean([Recipe] $recipe) {
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Cleaning $($vsProjectFile)..."
         dotnet clean $vsProjectFile
-        if ($LastExitCode -ne 0) {
-            $error = $true
-            $errorMessage = "Failed to clean $($component.name)"
-        }
         Pop-Location
-        if ($error) {break}
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the CLEAN step"
 }
 
 Function Setup([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
@@ -259,23 +249,13 @@ Function Setup([Recipe] $recipe) {
         PrintAction "Restoring $($component.name)..."
         $configFile = Join-Path $PSScriptRoot NuGet.Config
         dotnet restore --force --configfile $configFile
-        if ($LastExitCode -ne 0) {
-            $error = $true
-            $errorMessage = "Failed to restore $($component.name)"
-        }
         Pop-Location
-        if ($error) {break}
     }
     PathNugetFile -logout
-    if ($error) {
-        Write-Error "$($errorMessage)"
-    }
     PrintStep "Completed the SETUP step"
 }
 
 Function Build([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Started the BUILD step"
     foreach ($component in $recipe.components) {
@@ -295,22 +275,12 @@ Function Build([Recipe] $recipe) {
             CheckDockerStart
             docker build -f $DockerfilePath .
         }
-        if ($LastExitCode -ne 0) {
-            $error = $true
-            $errorMessage = "Failed to build $($component.name)"
-        }
-        if ($error) {break}
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the BUILD step"
     PathNugetFile -logout
 }
 
 Function Test([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the TEST step"
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetTest()) {
@@ -321,23 +291,13 @@ Function Test([Recipe] $recipe) {
             $vsProjectFile = "$($component.name).csproj"
             PrintAction "Testing $($vsProjectFile)..."
             dotnet test $vsProjectFile
-            if ($LastExitCode -ne 0) {
-                $error = $true
-                $errorMessage = "Failed to test $($component.name)"
-            }
             Pop-Location
-            if ($error) {break}
         }
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the TEST step"
 }
 
 Function Pack([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the PACK step"
     foreach ($component in $recipe.components) {
         PrintAction "Packing component $($component.name)"
@@ -358,22 +318,11 @@ Function Pack([Recipe] $recipe) {
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
         }
-        # TEMP
-        # if ($LastExitCode -ne 0) {
-        #     $error = $true
-        #     $errorMessage = "Failed to pack $($component.name)"
-        # }
-        # if ($error) {break}
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the PACK step"
 }
 
 Function Publish([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
         PrintAction "Pushing $($component.type) component $($component.name)"
@@ -401,20 +350,10 @@ Function Publish([Recipe] $recipe) {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -TimeoutSec 9200 -UseBasicParsing -Uri (New-Object System.Uri ($Env:BAKE_ARTIFACTS_REPO_URI + $component.name + "/" + $fileName)) -InFile $file -Method Put -Credential (New-Object System.Management.Automation.PSCredential ($Env:BAKE_NUGET_USERNAME), (ConvertTo-SecureString ($Env:BAKE_NUGET_PASSWORD) -AsPlainText -Force))
         }
     }
-    if ($LastExitCode -ne 0) {
-        $error = $true
-        $errorMessage = "Failed to publish $($component.name)"
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
-    }
-    if ($error) {break}
     PrintStep "Completed the PUBLISH step"
 }
 
 Function SetupBox([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the SETUPBOX step"
     foreach ($component in $recipe.components) {
         if (($component.IsDotNetApp()) -or ($component.IsDotNetTest())) {
@@ -440,28 +379,16 @@ Function SetupBox([Recipe] $recipe) {
                             $input = Read-Host
                         }
                         dotnet user-secrets set $secretKey $input
-                        if ($LastExitCode -ne 0) {
-                            $error = $true
-                            $errorMessage = "Failed to setup box $($component.name)"
-                        }
-                        if ($error) {break}
                     }
-                    if ($error) {break}
                 }
             }
             Pop-Location
-            if ($error) {break}
         }
-    }
-    if ($error) {
-        Write-Error "$($errorMessage)"
     }
     PrintStep "Completed the SETUPBOX step"
 }
 
 Function docker.start ([Recipe] $recipe) {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the DOCKER.START step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     CheckDockerStart
@@ -473,18 +400,14 @@ Function docker.start ([Recipe] $recipe) {
         docker-compose up -d --remove-orphans 
     }
     PathNugetFile -logout
-    if ($error) { Write-Error "$($errorMessage)" }
     PrintStep "Completed the DOCKER.START step"
 }
 
 Function docker.stop () {
-    $error = $false
-    $errorMessage = ""
     PrintStep "Started the DOCKER.STOP step"
     Write-Host "I'm stopping all project's containers..." -ForegroundColor Yellow
     if (Test-Path env:IS_CI) { docker-compose -f docker-compose.yml --log-level ERROR down } else { docker-compose down }
     if (docker ps -aq) { docker rm $(docker ps -aq) -f }
-    if ($error) { Write-Error "$($errorMessage)" }
     PrintStep "Completed the DOCKER.STOP step"
 }
 
