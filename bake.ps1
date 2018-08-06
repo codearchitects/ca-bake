@@ -273,7 +273,8 @@ Function Build([Recipe] $recipe) {
             $DockerfilePath = Join-Path $path "Dockerfile"
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
-            docker build -f $DockerfilePath .
+            $imageName = $($component.name).ToLower().Trim()
+            docker build -f $DockerfilePath . -t $imageName":latest"
         }
     }
     PrintStep "Completed the BUILD step"
@@ -325,10 +326,9 @@ Function Pack([Recipe] $recipe) {
 Function Publish([Recipe] $recipe) {
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
-        PrintAction "Pushing $($component.type) component $($component.name)"
-        $path = Join-Path $PSScriptRoot $component.packageDist
+        PrintAction "Publishing $($component.type) component $($component.name)"
         if ($component.IsDotNetPackage()) {
-            PrintAction "Pushing location $($path)"
+            $path = Join-Path $PSScriptRoot $component.packageDist
             Push-Location $path
             $version = $recipe.GetVersion()
             $package = "$($component.package).$($version).nupkg"
@@ -358,14 +358,10 @@ Function SetupBox([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (($component.IsDotNetApp()) -or ($component.IsDotNetTest())) {
             PrintAction "SETUPBOX for the component $($component.name)"
-            $path = Join-Path $PSScriptRoot ("\" + $component.path)
+            $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
             Push-Location $path
             dotnet user-secrets clear
-            if ($LastExitCode -ne 0) {
-                $error = $true
-                $errorMessage = "Failed to clear user secrets $($component.name)"
-            }
             else {
                 foreach ($secret in $component.secrets) {
                     foreach ($key in $secret.items.Keys) {
@@ -413,6 +409,7 @@ Function docker.stop () {
 
 Function docker.clean () {
     docker system prune -f
+    docker container prune -f
     docker volume prune -f
     docker network prune -f
 }
