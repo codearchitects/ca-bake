@@ -310,7 +310,7 @@ Function Pack([Recipe] $recipe) {
             PrintAction "Packing $($component.name)..."
             $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
-            dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
+            dotnet pack /p:Version="$version" --no-dependencies --force -c Release --output $distPath
             Pop-Location
         }
         elseif ($component.IsDotNetMigrationDbUp()) {
