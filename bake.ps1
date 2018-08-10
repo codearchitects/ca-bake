@@ -222,7 +222,7 @@ Class Recipe {
 
 Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
-    Remove-Item "dist" -Force -ErrorAction SilentlyContinue
+    Remove-Item "dist" -Confirm -Force -ErrorAction SilentlyContinue
     foreach ($component in $recipe.components) {
         PrintAction "Cleaning component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
