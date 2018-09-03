@@ -3,6 +3,7 @@ param($step)
 $ErrorActionPreference = "Stop"
 
 import-module psyaml
+dotnet tool install --global dotnet-sonarscanner --version 4.3.1
 
 # Functions
 
@@ -115,6 +116,7 @@ Function LoadRecipe() {
         $component.name = $item["name"]
         $component.path = $item["path"]
         $component.type = $item["type"]
+        $component.codequality = $item["codequality"]
         $component.packageDist = $item["packageDist"]
         $component.packagePath = $item["packagePath"]
         $component.sourcePath = $item["sourcePath"]
@@ -142,6 +144,7 @@ Class Component {
     [string]$name
     [string]$path
     [string]$type
+    [string]$codequality
     [string]$packageDist
     [string]$sourcePath
     [string]$package
@@ -162,6 +165,10 @@ Class Component {
 
     [boolean] IsDotNetMigrationDbUp() {
         return $this.type -eq "dotnet-migration-dbup"
+    }
+
+    [boolean] CodeQualityCheck() {
+        return $this.codequality -eq $true
     }
 }
 
@@ -222,7 +229,7 @@ Class Recipe {
 
 Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
-    Remove-Item "dist" -Confirm -Force -ErrorAction SilentlyContinue
+    Remove-Item "dist" -Force -Recurse -ErrorAction SilentlyContinue
     foreach ($component in $recipe.components) {
         PrintAction "Cleaning component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
@@ -240,9 +247,7 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
-
         if ($component.IsDotNetApp()) { continue }
-
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
@@ -286,7 +291,7 @@ Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetTest()) {
-            PrintAction "Testing component $($component.name)"
+            PrintAction "Testing component $($component.name)..."
             $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
             Push-Location $path
@@ -297,6 +302,26 @@ Function Test([Recipe] $recipe) {
         }
     }
     PrintStep "Completed the TEST step"
+}
+
+Function CodeQuality ([Recipe] $recipe) {
+    PrintStep "Started the CODEQUALITY step"
+    foreach ($component in $recipe.components) {
+        $path = Join-Path $PSScriptRoot $component.path
+        if ($component.CodeQualityCheck()) {
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            $vsProjectFile = "$($component.name).csproj"
+            $coverageFile = Join-Path $path "coverage.opencover.xml"
+            PrintAction "Starting Code Coverage..."
+            dotnet sonarscanner begin /k:"$vsProjectFile" /n:"$vsProjectFile" /d:sonar.cs.opencover.reportsPaths=$coverageFile /d:sonar.host.url="$env:SONAR_HOST_URL"
+            dotnet test $vsProjectFile /p:CollectCoverage=true /p:CoverletOutputFormat="opencover" 
+            dotnet sonarscanner end
+            PrintAction "Code Coverage completed."
+            Pop-Location
+        }
+    }
+    PrintStep "Completed the CODEQUALITY step"
 }
 
 Function Pack([Recipe] $recipe) {
@@ -433,6 +458,9 @@ if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "BUILD") {
 }
 if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "TEST") {
     Test($recipe)
+}
+if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "CODEQUALITY") {
+    CodeQuality($recipe)
 }
 if ($step -eq "CI" -or $step -eq "RC" -or $step -eq "PACK") {
     Pack($recipe)
