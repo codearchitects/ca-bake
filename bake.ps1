@@ -3,7 +3,6 @@ param($step)
 $ErrorActionPreference = "Stop"
 
 import-module psyaml
-dotnet tool install --global dotnet-sonarscanner --version 4.3.1
 
 # Functions
 
@@ -306,6 +305,8 @@ Function Test([Recipe] $recipe) {
 
 Function CodeQuality ([Recipe] $recipe) {
     PrintStep "Started the CODEQUALITY step"
+    $whoami = whoami
+    $env:PATH += ":/home/$whoami/.dotnet/tools"
     foreach ($component in $recipe.components) {
         $path = Join-Path $PSScriptRoot $component.path
         if ($component.CodeQualityCheck()) {
