@@ -315,9 +315,9 @@ Function CodeQuality ([Recipe] $recipe) {
             $vsProjectFile = "$($component.name).csproj"
             $coverageFile = Join-Path $path "coverage.opencover.xml"
             PrintAction "Starting Code Coverage..."
-            dotnet sonarscanner begin /k:"$vsProjectFile" /n:"$vsProjectFile" /d:sonar.cs.opencover.reportsPaths=$coverageFile /d:sonar.host.url="$env:SONAR_HOST_URL"
+            dotnet sonarscanner begin /k:"$vsProjectFile" /n:"$vsProjectFile" /v:"$($recipe.GetVersion())" /d:sonar.cs.opencover.reportsPaths=$coverageFile /d:sonar.host.url="$env:SONAR_HOST_URL" /d:sonar.login="$env:SONAR_LOGIN_TOKEN" /d:sonar.exclusions=**/AssemblyInfo.cs,**/lib/**
             dotnet test $vsProjectFile /p:CollectCoverage=true /p:CoverletOutputFormat="opencover" 
-            dotnet sonarscanner end
+            dotnet sonarscanner end /d:sonar.login="$env:SONAR_LOGIN_TOKEN"
             PrintAction "Code Coverage completed."
             Pop-Location
         }
