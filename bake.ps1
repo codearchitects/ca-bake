@@ -116,6 +116,10 @@ Function LoadRecipe() {
         $component.path = $item["path"]
         $component.type = $item["type"]
         $component.codequality = $item["codequality"]
+        $component.optional = @()
+        foreach ($itemOptional in $item["optional"]) {
+            $component.optional += $itemOptional
+        }
         $component.packageDist = $item["packageDist"]
         $component.packagePath = $item["packagePath"]
         $component.sourcePath = $item["sourcePath"]
@@ -125,9 +129,9 @@ Function LoadRecipe() {
             $secretItem = New-Object Secret
             $secretItem.name = $items2["name"]
             $secretItem.items = $items2["items"]
-            $component.secrets = $component.secrets + $secretItem
+            $component.secrets += $secretItem
         }
-        $components = $components + $component
+        $components += $component
     }
     $recipe.components = $components
     $recipe.environment = @{}
@@ -138,12 +142,18 @@ Function LoadRecipe() {
     return $recipe
 }
 
+Function CheckOptional(){
+    $optionalStep = [string]$(Get-PSCallStack)[1].FunctionName.ToLower()
+    return $($env:BAKE_OPTIONAL_ENABLED -eq $true -and $component.optional.Contains($optionalStep) -eq $true)
+}
+
 # Classes
 Class Component {
     [string]$name
     [string]$path
     [string]$type
     [string]$codequality
+    [string[]]$optional
     [string]$packageDist
     [string]$sourcePath
     [string]$package
@@ -230,6 +240,7 @@ Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
     Remove-Item "dist" -Force -Recurse -ErrorAction SilentlyContinue
     foreach ($component in $recipe.components) {
+        if (CheckOptional) { continue }
         PrintAction "Cleaning component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
@@ -247,6 +258,7 @@ Function Setup([Recipe] $recipe) {
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
         if ($component.IsDotNetApp()) { continue }
+        if (CheckOptional) { continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
@@ -261,34 +273,36 @@ Function Setup([Recipe] $recipe) {
 }
 
 Function Build([Recipe] $recipe) {
-    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     PrintStep "Started the BUILD step"
+    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
-        PrintAction "Building $($component.type) component $($component.name)"
-        $path = Join-Path $PSScriptRoot $component.path
-        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
-            PrintAction "Pushing location $($path)"
-            Push-Location $path
-            $vsProjectFile = "$($component.name).csproj"
-            PrintAction "Building $($vsProjectFile)..."
-            dotnet build $vsProjectFile --no-restore --configuration Release
-            Pop-Location
-        }
-        elseif ($component.IsDotNetApp()) {
-            $DockerfilePath = Join-Path $path "Dockerfile"
-            PrintAction "Building $($component.name) in Docker..."
-            CheckDockerStart
-            $imageName = $($component.name).ToLower().Trim()
-            docker build -f $DockerfilePath . -t $imageName":latest"
-        }
+        if (CheckOptional) { continue }
+            PrintAction "Building $($component.type) component $($component.name)"
+            $path = Join-Path $PSScriptRoot $component.path
+            if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
+                PrintAction "Pushing location $($path)"
+                Push-Location $path
+                $vsProjectFile = "$($component.name).csproj"
+                PrintAction "Building $($vsProjectFile)..."
+                dotnet build $vsProjectFile --no-restore --configuration Release
+                Pop-Location
+            }
+            elseif ($component.IsDotNetApp()) {
+                $DockerfilePath = Join-Path $path "Dockerfile"
+                PrintAction "Building $($component.name) in Docker..."
+                CheckDockerStart
+                $imageName = $($component.name).ToLower().Trim()
+                docker build -f $DockerfilePath . -t $imageName":latest"
+            }
     }
-    PrintStep "Completed the BUILD step"
     PathNugetFile -logout
+    PrintStep "Completed the BUILD step"
 }
 
 Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
     foreach ($component in $recipe.components) {
+        if (CheckOptional) { continue }
         if ($component.IsDotNetTest()) {
             PrintAction "Testing component $($component.name)..."
             $path = Join-Path $PSScriptRoot $component.path
@@ -328,6 +342,7 @@ Function CodeQuality ([Recipe] $recipe) {
 Function Pack([Recipe] $recipe) {
     PrintStep "Started the PACK step"
     foreach ($component in $recipe.components) {
+        if (CheckOptional) { continue }
         PrintAction "Packing component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         if ($component.IsDotNetPackage()) {
@@ -353,6 +368,7 @@ Function Pack([Recipe] $recipe) {
 Function Publish([Recipe] $recipe) {
     PrintStep "Started the PUBLISH step"
     foreach ($component in $recipe.components) {
+        if (CheckOptional) { continue }
         PrintAction "Publishing $($component.type) component $($component.name)"
         if ($component.IsDotNetPackage()) {
             $path = Join-Path $PSScriptRoot $component.packageDist
