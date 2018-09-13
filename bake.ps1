@@ -92,7 +92,7 @@ Function CheckDockerStart () {
     if ((Get-Command Get-WmiObject -errorAction SilentlyContinue) -and !(get-process | Where-Object {$_.path -eq $pathDockerForWindows})) {
         Write-Host "Docker is off, I'm starting it now..." -ForegroundColor Yellow
         if (-not (Test-Path env:IS_CI)) { & $pathDockerForWindows }
-        do {docker ps 2>&1>$null; Start-Sleep 3} while ($lastexitcode -ne 0)
+        do { $ErrorActionPreference = "SilentlyContinue"; docker ps 2>&1>$null; $ErrorActionPreference = "Stop"; Start-Sleep 3 } while ($lastexitcode -ne 0)
     }
 }
 
@@ -265,8 +265,8 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
-        if ($component.IsDotNetApp() -or $component.IsDotnetTestApp()) { continue }
         if (CheckOptional) { continue }
+        if ($component.IsDotNetApp() -or $component.IsDotnetTestApp()) { continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
