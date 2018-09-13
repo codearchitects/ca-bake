@@ -176,6 +176,10 @@ Class Component {
         return $this.type -eq "dotnet-app"
     }
 
+    [boolean] IsDotNetTestApp() {
+        return $this.type -eq "dotnet-test-app"
+    }
+
     [boolean] IsDotNetMigrationDbUp() {
         return $this.type -eq "dotnet-migration-dbup"
     }
@@ -261,7 +265,7 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
-        if ($component.IsDotNetApp()) { continue }
+        if ($component.IsDotNetApp() -or $component.IsDotnetTestApp()) { continue }
         if (CheckOptional) { continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
@@ -291,7 +295,7 @@ Function Build([Recipe] $recipe) {
                 dotnet build $vsProjectFile --no-restore --configuration Release
                 Pop-Location
             }
-            elseif ($component.IsDotNetApp()) {
+            elseif ($component.IsDotNetApp() -or $component.IsDotnetTestApp()) {
                 $DockerfilePath = Join-Path $path "Dockerfile"
                 PrintAction "Building $($component.name) in Docker..."
                 CheckDockerStart
@@ -307,7 +311,7 @@ Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-            if ($component.IsDotNetTest()) {
+        if ($component.IsDotNetTest()) {
             PrintAction "Testing component $($component.name)..."
             $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
@@ -316,6 +320,12 @@ Function Test([Recipe] $recipe) {
             PrintAction "Testing $($vsProjectFile)..."
             dotnet test $vsProjectFile
             Pop-Location
+        }
+        elseif ($component.IsDotNetTestApp()) {
+            PrintAction "Testing $($component.name) in Docker..."
+            CheckDockerStart
+            $imageName = $($component.name).ToLower().Trim()
+            docker run $imageName":latest"
         }
     }
     PrintStep "Completed the TEST step"
@@ -384,7 +394,7 @@ Function Publish([Recipe] $recipe) {
             dotnet nuget push $package -k $recipe.GetNugetFeedApiKey() -s $source
             Pop-Location
         }
-        elseif ($component.IsDotNetApp()) {
+        elseif ($component.IsDotNetApp() -or $component.IsDotNetTestApp()) {
             SetupDocker
             $imageName = $($component.name).ToLower().Trim()
             docker tag $imageName":latest" $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
