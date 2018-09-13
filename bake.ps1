@@ -144,7 +144,11 @@ Function LoadRecipe() {
 
 Function CheckOptional(){
     $optionalStep = [string]$(Get-PSCallStack)[1].FunctionName.ToLower()
-    return $($env:BAKE_OPTIONAL_ENABLED -eq $true -and $component.optional.Contains($optionalStep) -eq $true)
+    if($env:BAKE_OPTIONAL_ENABLED -eq $true -and $component.optional.Contains($optionalStep) -eq $true){
+        PrintAction "Skipping optional component $($component.name)"
+        return $true
+    }
+    return $false
 }
 
 # Classes
@@ -303,7 +307,7 @@ Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        if ($component.IsDotNetTest()) {
+            if ($component.IsDotNetTest()) {
             PrintAction "Testing component $($component.name)..."
             $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
