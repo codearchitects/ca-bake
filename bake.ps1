@@ -295,7 +295,7 @@ Function Build([Recipe] $recipe) {
                 dotnet build $vsProjectFile --no-restore --configuration Release
                 Pop-Location
             }
-            elseif ($component.IsDotNetApp() -or $component.IsDotnetTestApp()) {
+            if ($component.IsDotNetApp() -or $component.IsDotnetTestApp() -or $component.IsDotNetMigrationDbUp()) {
                 $DockerfilePath = Join-Path $path "Dockerfile"
                 PrintAction "Building $($component.name) in Docker..."
                 CheckDockerStart
@@ -325,7 +325,7 @@ Function Test([Recipe] $recipe) {
             PrintAction "Testing $($component.name) in Docker..."
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
-            docker run $imageName":latest"
+            docker-compose run $imageName
         }
     }
     PrintStep "Completed the TEST step"
