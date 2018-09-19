@@ -325,7 +325,7 @@ Function Test([Recipe] $recipe) {
             PrintAction "Testing $($component.name) in Docker..."
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
-            docker-compose run $imageName
+            docker-compose --log-level ERROR run $imageName
         }
     }
     PrintStep "Completed the TEST step"
