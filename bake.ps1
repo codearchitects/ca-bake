@@ -309,6 +309,7 @@ Function Build([Recipe] $recipe) {
 
 Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
+    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         if ($component.IsDotNetTest()) {
@@ -328,6 +329,7 @@ Function Test([Recipe] $recipe) {
             docker-compose --log-level ERROR run $imageName
         }
     }
+    PathNugetFile -logout
     PrintStep "Completed the TEST step"
 }
 
