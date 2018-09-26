@@ -478,6 +478,7 @@ if ([string]::IsNullOrEmpty($step)) {
     return
 }
 PrintBanner
+Write-Host "Agent ID: $env:AGENT_ID"
 $recipe = LoadRecipe
 PrintStep "Loaded recipe: $($recipe.name)"
 
