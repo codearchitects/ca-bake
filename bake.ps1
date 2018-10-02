@@ -467,10 +467,16 @@ Function docker.stop () {
 }
 
 Function docker.clean () {
+    PrintStep "Started the DOCKER.CLEAN step"
+    foreach ($component in $recipe.components) {
+        $imageName = $($component.name).ToLower().Trim()
+        docker rmi $imageName -f
+    }
     docker system prune -f
     docker container prune -f
     docker volume prune -f
     docker network prune -f
+    PrintStep "Completed the DOCKER.CLEAN step"
 }
 
 if ([string]::IsNullOrEmpty($step)) {
