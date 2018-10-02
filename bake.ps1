@@ -471,6 +471,7 @@ Function docker.stop () {
 
 Function docker.clean () {
     PrintStep "Started the DOCKER.CLEAN step"
+    $ErrorActionPreference = "SilentlyContinue"
     foreach ($component in $recipe.components) {
         $imageName = $($component.name).ToLower().Trim()
         docker rmi $imageName -f
@@ -479,6 +480,7 @@ Function docker.clean () {
     docker container prune -f
     docker volume prune -f
     docker network prune -f
+    $ErrorActionPreference = "Stop"
     PrintStep "Completed the DOCKER.CLEAN step"
 }
 
