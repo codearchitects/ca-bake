@@ -116,6 +116,7 @@ Function LoadRecipe() {
         $component.path = $item["path"]
         $component.type = $item["type"]
         $component.codequality = $item["codequality"]
+        $component.buildProfile = $item["buildProfile"]
         $component.optional = @()
         foreach ($itemOptional in $item["optional"]) {
             $component.optional += $itemOptional
@@ -157,6 +158,7 @@ Class Component {
     [string]$path
     [string]$type
     [string]$codequality
+    [string]$buildProfile
     [string[]]$optional
     [string]$packageDist
     [string]$sourcePath
@@ -287,12 +289,13 @@ Function Build([Recipe] $recipe) {
         if (CheckOptional) { continue }
             PrintAction "Building $($component.type) component $($component.name)"
             $path = Join-Path $PSScriptRoot $component.path
+            $buildProfile = @{$true=$component.buildProfile;$false="Debug"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
             if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
                 PrintAction "Pushing location $($path)"
                 Push-Location $path
                 $vsProjectFile = "$($component.name).csproj"
                 PrintAction "Building $($vsProjectFile)..."
-                dotnet build $vsProjectFile --no-restore --configuration Release
+                dotnet build $vsProjectFile --no-restore --configuration $buildProfile
                 Pop-Location
             }
             if ($component.IsDotNetApp() -or $component.IsDotnetTestApp() -or $component.IsDotNetMigrationDbUp()) {
