@@ -471,16 +471,16 @@ Function docker.stop () {
 
 Function docker.clean () {
     PrintStep "Started the DOCKER.CLEAN step"
-    $ErrorActionPreference = "SilentlyContinue"
-    foreach ($component in $recipe.components) {
-        $imageName = $($component.name).ToLower().Trim()
-        docker rmi $imageName -f
-    }
+    # $ErrorActionPreference = "SilentlyContinue"
+    # foreach ($component in $recipe.components) {
+    #     $imageName = $($component.name).ToLower().Trim()
+    #     docker rmi $imageName -f
+    # }
+    # $ErrorActionPreference = "Stop"
     docker system prune -f
     docker container prune -f
     docker volume prune -f
     docker network prune -f
-    $ErrorActionPreference = "Stop"
     PrintStep "Completed the DOCKER.CLEAN step"
 }
 
