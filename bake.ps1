@@ -289,7 +289,7 @@ Function Build([Recipe] $recipe) {
         if (CheckOptional) { continue }
             PrintAction "Building $($component.type) component $($component.name)"
             $path = Join-Path $PSScriptRoot $component.path
-            $buildProfile = @{$true=$component.buildProfile;$false="Debug"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
+            $buildProfile = @{$true=$component.buildProfile;$false="Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
             if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
                 PrintAction "Pushing location $($path)"
                 Push-Location $path
