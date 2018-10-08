@@ -343,6 +343,7 @@ Function CodeQuality ([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         $path = Join-Path $PSScriptRoot $component.path
         if ($component.CodeQualityCheck()) {
+            if (CheckOptional) { continue }
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
