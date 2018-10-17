@@ -420,7 +420,7 @@ Function Publish([Recipe] $recipe) {
             docker push $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
             SetupDocker -logout
         }
-        elseif ($component.IsDotNetMigrationDbUp()) {
+        elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
             $file = Join-Path $component.packageDist ($component.name + ".latest.zip")
             $fileName = $component.name + ".latest.zip"
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -TimeoutSec 9200 -UseBasicParsing -Uri (New-Object System.Uri ($Env:BAKE_ARTIFACTS_REPO_URI + $component.name + "/" + $fileName)) -InFile $file -Method Put -Credential (New-Object System.Management.Automation.PSCredential ($Env:BAKE_NUGET_USERNAME), (ConvertTo-SecureString ($Env:BAKE_NUGET_PASSWORD) -AsPlainText -Force))
