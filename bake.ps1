@@ -316,7 +316,6 @@ Function Build([Recipe] $recipe) {
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
             docker build -f $DockerfilePath . -t $imageName":latest"
-            New-Item -ItemType Directory -Path $component.packageDist
             docker run --rm -v ${pwd}:/app --name temp_build_dist $imageName":latest"
         }
     }
