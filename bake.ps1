@@ -315,9 +315,9 @@ Function Build([Recipe] $recipe) {
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
-            docker build -f $DockerfilePath . -t $imageName":latest"
+            $buildUser=@("user",$(whoami))[[bool]$IsLinux]
+            docker build -f $DockerfilePath . --build-arg BUILD_USER=$buildUser -t $imageName":latest"
             docker run --rm -v ${pwd}:/app --name temp_build_dist $imageName":latest"
-            if ($IsLinux) { chmod -R -f 777 . }
         }
     }
     PathNugetFile -logout
