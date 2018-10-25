@@ -317,6 +317,7 @@ Function Build([Recipe] $recipe) {
             $imageName = $($component.name).ToLower().Trim()
             docker build -f $DockerfilePath . -t $imageName":latest"
             docker run --rm -v ${pwd}:/app --name temp_build_dist $imageName":latest"
+            if ($IsLinux) { chmod -R 777 . }
         }
     }
     PathNugetFile -logout
