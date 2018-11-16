@@ -293,6 +293,7 @@ Function Build([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         PrintAction "Building $($component.type) component $($component.name)"
+        $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         $buildProfile = @{$true = $component.buildProfile; $false = "Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
         if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
@@ -308,15 +309,15 @@ Function Build([Recipe] $recipe) {
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
-            docker build -f $DockerfilePath . -t $imageName":latest"
+            docker build -f $DockerfilePath . -t $imageName":"$version
         }
         if ($component.IsAspNetApp()) {
             $DockerfilePath = Join-Path $path "Dockerfile"
             PrintAction "Building $($component.name) in Docker..."
             CheckDockerStart
             $imageName = $($component.name).ToLower().Trim()
-            docker build -f $DockerfilePath . -t $imageName":latest"
-            docker run --rm -u $(id -u) -v ${pwd}:/app --name temp_build_dist $imageName":latest"
+            docker build -f $DockerfilePath . -t $imageName":"$version
+            docker run --rm -u $(id -u) -v ${pwd}:/app --name temp_build_dist $imageName":"$version
         }
     }
     PathNugetFile -logout
@@ -354,6 +355,7 @@ Function CodeQuality ([Recipe] $recipe) {
     $whoami = whoami
     $env:PATH += ":/home/$whoami/.dotnet/tools"
     foreach ($component in $recipe.components) {
+        $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         if ($component.CodeQualityCheck()) {
             if (CheckOptional) { continue }
@@ -362,7 +364,7 @@ Function CodeQuality ([Recipe] $recipe) {
             $vsProjectFile = "$($component.name).csproj"
             $coverageFile = Join-Path $path "coverage.opencover.xml"
             PrintAction "Starting Code Coverage..."
-            dotnet sonarscanner begin /k:"$vsProjectFile" /n:"$vsProjectFile" /v:"$($recipe.GetVersion())" /d:sonar.cs.opencover.reportsPaths=$coverageFile /d:sonar.host.url="$env:SONAR_HOST_URL" /d:sonar.login="$env:SONAR_LOGIN_TOKEN" /d:sonar.exclusions="**/AssemblyInfo.cs,**/lib/**"
+            dotnet sonarscanner begin /k:"$vsProjectFile" /n:"$vsProjectFile" /v:"$version" /d:sonar.cs.opencover.reportsPaths=$coverageFile /d:sonar.host.url="$env:SONAR_HOST_URL" /d:sonar.login="$env:SONAR_LOGIN_TOKEN" /d:sonar.exclusions="**/AssemblyInfo.cs,**/lib/**"
             dotnet test $vsProjectFile /p:CollectCoverage=true /p:CoverletOutputFormat="opencover" 
             dotnet sonarscanner end /d:sonar.login="$env:SONAR_LOGIN_TOKEN"
             PrintAction "Code Coverage completed."
@@ -377,19 +379,19 @@ Function Pack([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         PrintAction "Packing component $($component.name)"
+        $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         if ($component.IsDotNetPackage()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             PrintAction "Packing $($component.name)..."
-            $version = $recipe.GetVersion()
             $distPath = Join-Path $PSScriptRoot $component.packageDist
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
             Pop-Location
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
             $source = Join-Path $component.path $component.sourcePath
-            $destination = Join-Path $component.packageDist ($component.name + ".latest.zip")
+            $destination = Join-Path $component.packageDist ($component.name + "." + $version + ".zip")
             if (-not (Test-path $component.packageDist)) { new-item -Name $component.packageDist -ItemType directory }
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
@@ -403,10 +405,10 @@ Function Publish([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         PrintAction "Publishing $($component.type) component $($component.name)"
+        $version = $recipe.GetVersion()
         if ($component.IsDotNetPackage()) {
             $path = Join-Path $PSScriptRoot $component.packageDist
             Push-Location $path
-            $version = $recipe.GetVersion()
             $package = "$($component.package).$($version).nupkg"
             $source = "$($recipe.GetNugetFeed())/$($component.packagePath)"
             Write-Host "Publishing package $($package)"
@@ -416,13 +418,13 @@ Function Publish([Recipe] $recipe) {
         elseif ($component.IsDotNetApp() -or $component.IsDotNetTestApp()) {
             SetupDocker
             $imageName = $($component.name).ToLower().Trim()
-            docker tag $imageName":latest" $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
-            docker push $Env:JFROG_DOCKER_LOCAL/$imageName":latest"
+            docker tag $imageName":"$version $Env:JFROG_DOCKER_LOCAL/$imageName":"$version
+            docker push $Env:JFROG_DOCKER_LOCAL/$imageName":"$version
             SetupDocker -logout
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
-            $file = Join-Path $component.packageDist ($component.name + ".latest.zip")
-            $fileName = $component.name + ".latest.zip"
+            $file = Join-Path $component.packageDist ($component.name + "." + $version.zip)
+            $fileName = $component.name + "." + $version + ".zip"
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -TimeoutSec 9200 -UseBasicParsing -Uri (New-Object System.Uri ($Env:BAKE_ARTIFACTS_REPO_URI + $component.name + "/" + $fileName)) -InFile $file -Method Put -Credential (New-Object System.Management.Automation.PSCredential ($Env:BAKE_NUGET_USERNAME), (ConvertTo-SecureString ($Env:BAKE_NUGET_PASSWORD) -AsPlainText -Force))
         }
     }
