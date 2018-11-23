@@ -418,11 +418,8 @@ Function Publish([Recipe] $recipe) {
         elseif ($component.IsDotNetApp() -or $component.IsDotNetTestApp()) {
             SetupDocker
             $imageName = $($component.name).ToLower().Trim()
-            $imageTag = $imageName":"$version
-            $imageFinal = $Env:JFROG_DOCKER_LOCAL/$imageTag
-            docker tag $imageTag $imageFinal
-            docker push $imageFinal
-            docker rmi $imageFinal
+            docker tag $imageName":"$version $Env:JFROG_DOCKER_LOCAL/$imageName":"$version
+            docker push $Env:JFROG_DOCKER_LOCAL/$imageName":"$version
             SetupDocker -logout
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
