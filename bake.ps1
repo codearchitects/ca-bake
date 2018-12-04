@@ -79,6 +79,24 @@ Function PathNugetFile([switch] $logout, [string] $file, [string] $feedName, [st
     $xml.Save((Join-Path $pwd $file))
 }
 
+Function EditSpecfile( [string] $file, [Recipe] $recipe){
+
+    $xml = [xml](Get-Content $file)
+    $licenseUrl = $xml.SelectSingleNode("//licenseUrl")
+    [Void]$licenseUrl.ParentNode.RemoveChild($licenseUrl)
+    $projectUrl = $xml.SelectSingleNode("//projectUrl")
+    [Void]$projectUrl.ParentNode.RemoveChild($projectUrl)
+    $iconUrl = $xml.SelectSingleNode("//iconUrl")
+    [Void]$iconUrl.ParentNode.RemoveChild($iconUrl)
+    $element =  $xml.SelectSingleNode("//version")
+    $element.InnerText = $recipe.GetVersion()
+    $title = $xml.SelectSingleNode("//title")
+    $tags = $xml.SelectSingleNode("//tags")
+    $tags.InnerText =$title.InnerText
+    $path = Join-Path $PSScriptRoot $component.path
+    $xml.Save(( Join-Path $path $file))
+}
+
 Function SetupDocker ([switch]$logout) {
     if ($logout) {
         docker logout $Env:JFROG_DOCKER_LOCAL
@@ -168,6 +186,10 @@ Class Component {
 
     [boolean] IsDotNetPackage() {
         return $this.type -eq "dotnet-package"
+    }
+
+    [boolean] IsDotNetFramework() {
+        return $this.type -eq "dotnet-framework"
     }
 
     [boolean] IsDotNetTest() {
@@ -296,7 +318,7 @@ Function Build([Recipe] $recipe) {
         $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         $buildProfile = @{$true = $component.buildProfile; $false = "Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
-        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
+        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetFramework()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
@@ -395,6 +417,19 @@ Function Pack([Recipe] $recipe) {
             if (-not (Test-path $component.packageDist)) { new-item -Name $component.packageDist -ItemType directory }
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
+        }elseif ($component.IsDotNetFramework()) {
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            PrintAction "Packing $($component.name)..."
+            $distPath = Join-Path $PSScriptRoot $component.packageDist
+            nuget spec "$($component.name).csproj" -Force
+            EditSpecfile "$($component.name).nuspec" $recipe
+            nuget pack -Prop Configuration=Release
+            $temp =  "$($component.name).$version.nupkg"
+            Copy-Item -Path $temp -Destination (New-Item  $distPath -Type container -Force) -Force
+            Pop-Location
+
+
         }
     }
     PrintStep "Completed the PACK step"
@@ -406,7 +441,7 @@ Function Publish([Recipe] $recipe) {
         if (CheckOptional) { continue }
         PrintAction "Publishing $($component.type) component $($component.name)"
         $version = $recipe.GetVersion()
-        if ($component.IsDotNetPackage()) {
+        if ($component.IsDotNetPackage() -or $component.IsDotNetFramework()) {
             $path = Join-Path $PSScriptRoot $component.packageDist
             Push-Location $path
             $package = "$($component.package).$($version).nupkg"
