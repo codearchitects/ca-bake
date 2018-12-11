@@ -79,8 +79,7 @@ Function PathNugetFile([switch] $logout, [string] $file, [string] $feedName, [st
     $xml.Save((Join-Path $pwd $file))
 }
 
-Function EditSpecfile( [string] $file, [Recipe] $recipe){
-
+Function EditSpecfile([string] $file, [Recipe] $recipe) {
     $xml = [xml](Get-Content $file)
     $licenseUrl = $xml.SelectSingleNode("//licenseUrl")
     [Void]$licenseUrl.ParentNode.RemoveChild($licenseUrl)
@@ -88,13 +87,13 @@ Function EditSpecfile( [string] $file, [Recipe] $recipe){
     [Void]$projectUrl.ParentNode.RemoveChild($projectUrl)
     $iconUrl = $xml.SelectSingleNode("//iconUrl")
     [Void]$iconUrl.ParentNode.RemoveChild($iconUrl)
-    $element =  $xml.SelectSingleNode("//version")
+    $element = $xml.SelectSingleNode("//version")
     $element.InnerText = $recipe.GetVersion()
     $title = $xml.SelectSingleNode("//title")
     $tags = $xml.SelectSingleNode("//tags")
-    $tags.InnerText =$title.InnerText
+    $tags.InnerText = $title.InnerText
     $path = Join-Path $PSScriptRoot $component.path
-    $xml.Save(( Join-Path $path $file))
+    $xml.Save((Join-Path $path $file))
 }
 
 Function SetupDocker ([switch]$logout) {
@@ -284,7 +283,10 @@ Function Clean([Recipe] $recipe) {
         Push-Location $path
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Cleaning $($vsProjectFile)..."
-        dotnet clean $vsProjectFile
+        if ($component.IsDotNetFramework()) { dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release }
+        else {
+            dotnet clean $vsProjectFile
+        }
         Pop-Location
     }
     PrintStep "Completed the CLEAN step"
@@ -296,6 +298,7 @@ Function Setup([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
+        if ($component.IsDotNetFramework()) { dotnet msbuild -t:restore; continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
@@ -417,16 +420,16 @@ Function Pack([Recipe] $recipe) {
             if (-not (Test-path $component.packageDist)) { new-item -Name $component.packageDist -ItemType directory }
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
-        }elseif ($component.IsDotNetFramework()) {
+        }
+        elseif ($component.IsDotNetFramework()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
-            PrintAction "Packing $($component.name)..."
             $distPath = Join-Path $PSScriptRoot $component.packageDist
             nuget spec "$($component.name).csproj" -Force
             EditSpecfile "$($component.name).nuspec" $recipe
             nuget pack -Prop Configuration=Release
-            $temp =  "$($component.name).$version.nupkg"
-            Copy-Item -Path $temp -Destination (New-Item  $distPath -Type container -Force) -Force
+            $componentNupkg = "$($component.name).$version.nupkg"
+            Copy-Item -Path $componentNupkg -Destination (New-Item  $distPath -Type container -Force) -Force
             Pop-Location
 
 
