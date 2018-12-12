@@ -298,7 +298,7 @@ Function Setup([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
-        if ($component.IsDotNetFramework()) { nuget restore; continue }
+        if ($component.IsDotNetFramework() -or $component.IsDotNetTest()) { nuget restore; continue }
         PrintAction "Restoring component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
