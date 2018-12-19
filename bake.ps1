@@ -1,11 +1,9 @@
 param($step)
-
 $ErrorActionPreference = "Stop"
-
+$global:ProgressPreference = "SilentlyContinue"
 import-module psyaml
 
 # Functions
-
 $bannerText = @"
  ______        _
 (____  \      | |
@@ -284,9 +282,7 @@ Function Clean([Recipe] $recipe) {
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Cleaning $($vsProjectFile)..."
         if ($component.IsDotNetFramework()) { dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release }
-        else {
-            dotnet clean $vsProjectFile
-        }
+        else { dotnet clean $vsProjectFile; dotnet clean $vsProjectFile --configuration Release }
         Pop-Location
     }
     PrintStep "Completed the CLEAN step"
@@ -326,7 +322,9 @@ Function Build([Recipe] $recipe) {
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
             PrintAction "Building $($vsProjectFile)..."
-            dotnet build $vsProjectFile --no-restore --configuration $buildProfile
+            $destination = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+            if (Test-path $destination) { Remove-item $destination -Force -Recurse -ErrorAction SilentlyContinue }
+            dotnet publish $vsProjectFile --no-restore --configuration $buildProfile -o $destination
             Pop-Location
         }
         if ($component.IsDotNetApp() -or $component.IsDotnetTestApp() -or $component.IsDotNetMigrationDbUp()) {
@@ -415,9 +413,9 @@ Function Pack([Recipe] $recipe) {
             Pop-Location
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
-            $source = Join-Path $component.path $component.sourcePath
-            $destination = Join-Path $component.packageDist ($component.name + "." + $version + ".zip")
-            if (-not (Test-path $component.packageDist)) { new-item -Name $component.packageDist -ItemType directory }
+            $source = Join-Path $component.path @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+            if (-not (Test-path $source)) { return }
+            $destination = Join-Path $source ($component.name + "." + $version + ".zip")
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
         }
@@ -464,8 +462,9 @@ Function Publish([Recipe] $recipe) {
             SetupDocker -logout
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
-            $file = Join-Path $component.packageDist ($component.name + "." + $version + ".zip")
             $fileName = $component.name + "." + $version + ".zip"
+            $file = Join-Path $component.path (Join-Path @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]  $fileName)
+            if (-not (Test-path $file)) { return }
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -TimeoutSec 9200 -UseBasicParsing -Uri (New-Object System.Uri ($Env:BAKE_ARTIFACTS_REPO_URI + $component.name + "/" + $fileName)) -InFile $file -Method Put -Credential (New-Object System.Management.Automation.PSCredential ($Env:BAKE_NUGET_USERNAME), (ConvertTo-SecureString ($Env:BAKE_NUGET_PASSWORD) -AsPlainText -Force))
         }
     }
