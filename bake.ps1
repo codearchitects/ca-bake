@@ -417,7 +417,7 @@ Function Pack([Recipe] $recipe) {
             if (-not (Test-path $source)) { return }
             $destination = Join-Path $source ($component.name + "." + $version + ".zip")
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
-            Compress-Archive -Path $source -CompressionLevel Optimal -DestinationPath $destination
+            Compress-Archive -Path (Join-Path $source *) -CompressionLevel Optimal -DestinationPath $destination
         }
         elseif ($component.IsDotNetFramework()) {
             PrintAction "Pushing location $($path)"
