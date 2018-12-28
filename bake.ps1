@@ -317,7 +317,17 @@ Function Build([Recipe] $recipe) {
         $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         $buildProfile = @{$true = $component.buildProfile; $false = "Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
-        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetFramework()) {
+        if ($component.IsDotNetFramework()) {
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            $vsProjectFile = "$($component.name).csproj"
+            PrintAction "Building $($vsProjectFile)..."
+            $destination = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+            if (Test-path $destination) { Remove-item $destination -Force -Recurse -ErrorAction SilentlyContinue }
+            dotnet build $vsProjectFile --no-restore --configuration $buildProfile
+            Pop-Location
+        }
+        if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             $vsProjectFile = "$($component.name).csproj"
