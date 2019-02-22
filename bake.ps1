@@ -12,6 +12,7 @@ $bannerText = @"
 | |__)  | ( | | |< ( (/ /
 |______/ \_||_|_| \_)____)
         by Code Architects
+
 "@
 
 Function PrintBanner() {
