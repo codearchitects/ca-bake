@@ -12,7 +12,6 @@ $bannerText = @"
 | |__)  | ( | | |< ( (/ /
 |______/ \_||_|_| \_)____)
         by Code Architects
-
 "@
 
 Function PrintBanner() {
@@ -208,6 +207,10 @@ Class Component {
     [boolean] IsDotNetMigrationDbUp() {
         return $this.type -eq "dotnet-migration-dbup"
     }
+    
+    [boolean] IsNpmPackage() {
+        return $this.type -eq "npm-package"
+    }
 
     [boolean] CodeQualityCheck() {
         return $this.codequality -eq $true
@@ -274,15 +277,18 @@ Function Clean([Recipe] $recipe) {
     Remove-Item "dist" -Force -Recurse -ErrorAction SilentlyContinue
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        if ($component.IsAspNetApp()) { continue }
+        if ($component.IsAspNetApp() -or $component.IsNpmPackage()) { continue }
         PrintAction "Cleaning component $($component.name)"
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
         Push-Location $path
         $vsProjectFile = "$($component.name).csproj"
         PrintAction "Cleaning $($vsProjectFile)..."
-        if ($component.IsDotNetFramework()) { dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release }
-        else { dotnet clean $vsProjectFile; dotnet clean $vsProjectFile --configuration Release }
+        if ($component.IsDotNetFramework()) {
+            dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release
+        } else {
+            dotnet clean $vsProjectFile; dotnet clean $vsProjectFile --configuration Release
+        }
         Pop-Location
     }
     PrintStep "Completed the CLEAN step"
@@ -290,12 +296,13 @@ Function Clean([Recipe] $recipe) {
 
 Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
-    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
+        if ($component.IsNpmPackage()) { npm run setup; continue }
         if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
         if ($component.IsDotNetFramework()) { nuget restore; continue }
         PrintAction "Restoring component $($component.name)"
+        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
         $path = Join-Path $PSScriptRoot $component.path
         PrintAction "Pushing location $($path)"
         Push-Location $path
@@ -303,17 +310,18 @@ Function Setup([Recipe] $recipe) {
         $configFile = Join-Path $PSScriptRoot NuGet.Config
         dotnet restore --force --configfile $configFile
         Pop-Location
+        PathNugetFile -logout
     }
-    PathNugetFile -logout
     PrintStep "Completed the SETUP step"
 }
 
 Function Build([Recipe] $recipe) {
     PrintStep "Started the BUILD step"
-    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
+        if ($component.IsNpmPackage()) { npm run build; continue }
         PrintAction "Building $($component.type) component $($component.name)"
+        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
         $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         $buildProfile = @{$true = $component.buildProfile; $false = "Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
@@ -352,16 +360,17 @@ Function Build([Recipe] $recipe) {
             docker build -f $DockerfilePath . -t $imageName":"$version
             docker run --rm -u $(id -u) -v ${pwd}:/app --name temp_build_dist $imageName":"$version
         }
+        PathNugetFile -logout
     }
-    PathNugetFile -logout
     PrintStep "Completed the BUILD step"
 }
 
 Function Test([Recipe] $recipe) {
     PrintStep "Started the TEST step"
-    PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
+        if ($component.IsNpmPackage()) { $Env:CI="true"; npm test; continue }
+        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
         if ($component.IsDotNetTest()) {
             PrintAction "Testing component $($component.name)..."
             $path = Join-Path $PSScriptRoot $component.path
@@ -378,8 +387,8 @@ Function Test([Recipe] $recipe) {
             $imageName = $($component.name).ToLower().Trim()
             docker-compose --log-level ERROR run $imageName
         }
+        PathNugetFile -logout
     }
-    PathNugetFile -logout
     PrintStep "Completed the TEST step"
 }
 
@@ -409,16 +418,23 @@ Function CodeQuality ([Recipe] $recipe) {
 
 Function Pack([Recipe] $recipe) {
     PrintStep "Started the PACK step"
+    PrintAction "Packing component $($component.name)"
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        PrintAction "Packing component $($component.name)"
         $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
+        $distPath = Join-Path $PSScriptRoot @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+        if ($component.IsNpmPackage()) {
+            $packageFile = "package.json"
+            Push-Location $distPath
+            (Get-Content -path $packageFile) | % { $_ -Replace '"version": "0.0.0"', ('"version": "'+$version+'"') } | % { $_ -Replace '"version":"0.0.0"', ('"version":"'+$version+'"') } | Out-File -Encoding UTF8 $packageFile
+            Pop-Location
+            continue
+        }
         if ($component.IsDotNetPackage()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             PrintAction "Packing $($component.name)..."
-            $distPath = Join-Path $PSScriptRoot $component.packageDist
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
             Pop-Location
         }
@@ -432,15 +448,12 @@ Function Pack([Recipe] $recipe) {
         elseif ($component.IsDotNetFramework()) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
-            $distPath = Join-Path $PSScriptRoot $component.packageDist
             nuget spec "$($component.name).csproj" -Force
             EditSpecfile "$($component.name).nuspec" $recipe
             nuget pack -Prop Configuration=Release
             $componentNupkg = "$($component.name).$version.nupkg"
             Copy-Item -Path $componentNupkg -Destination (New-Item  $distPath -Type container -Force) -Force
             Pop-Location
-
-
         }
     }
     PrintStep "Completed the PACK step"
@@ -452,6 +465,15 @@ Function Publish([Recipe] $recipe) {
         if (CheckOptional) { continue }
         PrintAction "Publishing $($component.type) component $($component.name)"
         $version = $recipe.GetVersion()
+        $distPath = Join-Path $PSScriptRoot @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+        if ($component.IsNpmPackage()) {
+            Push-Location $distPath
+            $npmrcLines = $Env:CA_BAKERY_NPM_REGISTRY_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))
+            $npmrcLines | Out-File -Encoding UTF8 ".npmrc"
+            npm publish
+            Pop-Location
+            continue
+        }
         if ($component.IsDotNetPackage() -or $component.IsDotNetFramework()) {
             $path = Join-Path $PSScriptRoot $component.packageDist
             Push-Location $path
