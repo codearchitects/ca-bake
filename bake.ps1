@@ -167,6 +167,15 @@ Function CheckOptional() {
     return $false
 }
 
+Function AuthenticateNpm([switch] $logout) {
+    $npmrcFile = ".npmrc"
+    $npmrcFileOriginal = ".npmrc.original"
+    if ($logout) { Remove-Item $npmrcFile -Force; Copy-Item -Path $npmrcFileOriginal -Destination $npmrcFile -Force; Remove-Item $npmrcFileOriginal -Force; return }
+    if (-not (Test-Path $npmrcFile)) { New-Item -Type File -Path $npmrcFile | Out-Null }
+    Copy-Item -Path $npmrcFile -Destination $npmrcFileOriginal
+    ($Env:CA_BAKE_NPM_REGISTRY_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))) + (Get-Content $npmrcFile) | Out-File -Encoding UTF8 $npmrcFile
+}
+
 # Classes
 Class Component {
     [string]$name
@@ -277,8 +286,7 @@ Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        $packageDist = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
-        $destination = Join-Path $PSScriptRoot $packageDist
+        $destination = Join-Path $PSScriptRoot @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
         PrintAction "Cleaning component $($component.name)"
         Remove-item $destination -Force -Recurse -ErrorAction SilentlyContinue
         if ($component.IsNpmPackage()) {
@@ -306,7 +314,7 @@ Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        if ($component.IsNpmPackage()) { npm run setup; continue }
+        if ($component.IsNpmPackage()) { AuthenticateNpm; npm run setup; AuthenticateNpm -logout; continue }
         if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
         if ($component.IsDotNetFramework()) { nuget restore; continue }
         PrintAction "Restoring component $($component.name)"
@@ -476,11 +484,10 @@ Function Publish([Recipe] $recipe) {
         $distPath = Join-Path $PSScriptRoot @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
         if ($component.IsNpmPackage()) {
             Push-Location $distPath
-            $npmrcLines = $Env:CA_BAKERY_NPM_REGISTRY_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))
-            $npmrcLines | Out-File -Encoding UTF8 ".npmrc"
+            AuthenticateNpm
             npm publish
+            AuthenticateNpm -logout
             Pop-Location
-            continue
         }
         if ($component.IsDotNetPackage() -or $component.IsDotNetFramework()) {
             $path = Join-Path $PSScriptRoot $component.packageDist
