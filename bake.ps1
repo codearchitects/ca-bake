@@ -275,22 +275,29 @@ Class Recipe {
 
 Function Clean([Recipe] $recipe) {
     PrintStep "Started the CLEAN step"
-    Remove-Item "dist" -Force -Recurse -ErrorAction SilentlyContinue
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
-        if ($component.IsAspNetApp() -or $component.IsNpmPackage()) { continue }
+        $packageDist = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+        $destination = Join-Path $PSScriptRoot $packageDist
         PrintAction "Cleaning component $($component.name)"
-        $path = Join-Path $PSScriptRoot $component.path
-        PrintAction "Pushing location $($path)"
-        Push-Location $path
-        $vsProjectFile = "$($component.name).csproj"
-        PrintAction "Cleaning $($vsProjectFile)..."
-        if ($component.IsDotNetFramework()) {
-            dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release
-        } else {
-            dotnet clean $vsProjectFile; dotnet clean $vsProjectFile --configuration Release
+        Remove-item $destination -Force -Recurse -ErrorAction SilentlyContinue
+        if ($component.IsNpmPackage()) {
+            $packageJson = Get-Content package.json | ConvertFrom-Json
+            if (-not ([string]::IsNullOrEmpty($packageJson.scripts.clean))) { npm run clean }
         }
-        Pop-Location
+        if ($component.IsDotNetPackage() -or $component.IsDotNetFramework() -or $component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetApp() -or $component.IsDotNetTest() -or $component.IsDotNetTestApp()) {
+            $path = Join-Path $PSScriptRoot $component.path
+            PrintAction "Pushing location $($path)"
+            $vsProjectFile = "$($component.name).csproj"
+            PrintAction "Cleaning $($vsProjectFile)..."
+            Push-Location $path
+            if ($component.IsDotNetFramework()) {
+                dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Debug; dotnet msbuild $vsProjectFile -t:Clean -p:Configuration=Release
+            } else {
+                dotnet clean $vsProjectFile; dotnet clean $vsProjectFile --configuration Release
+            }
+            Pop-Location
+        }
     }
     PrintStep "Completed the CLEAN step"
 }
