@@ -293,7 +293,7 @@ Function Clean([Recipe] $recipe) {
             $packageJson = Get-Content package.json | ConvertFrom-Json
             if (-not ([string]::IsNullOrEmpty($packageJson.scripts.clean))) { npm run clean }
         }
-        if ($component.IsDotNetPackage() -or $component.IsDotNetFramework() -or $component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetApp() -or $component.IsDotNetTest() -or $component.IsDotNetTestApp()) {
+        if ($component.IsDotNetPackage() -or $component.IsDotNetFramework() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetApp() -or $component.IsDotNetTest() -or $component.IsDotNetTestApp()) {
             $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
             $vsProjectFile = "$($component.name).csproj"
@@ -313,20 +313,24 @@ Function Clean([Recipe] $recipe) {
 Function Setup([Recipe] $recipe) {
     PrintStep "Started the SETUP step"
     foreach ($component in $recipe.components) {
+        PrintAction "Restoring component $($component.name)"
         if (CheckOptional) { continue }
         if ($component.IsNpmPackage()) { AuthenticateNpm; npm run setup; AuthenticateNpm -logout; continue }
         if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
-        if ($component.IsDotNetFramework()) { nuget restore; continue }
-        PrintAction "Restoring component $($component.name)"
-        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
-        $path = Join-Path $PSScriptRoot $component.path
-        PrintAction "Pushing location $($path)"
-        Push-Location $path
-        PrintAction "Restoring $($component.name)..."
-        $configFile = Join-Path $PSScriptRoot NuGet.Config
-        dotnet restore --force --configfile $configFile
-        Pop-Location
-        PathNugetFile -logout
+        if ($component.IsDotNetPackage() -or $component.IsDotNetFramework() -or $component.IsDotNetMigrationDbUp() -or $component.IsDotNetTest()) {
+            PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
+            if ($component.IsDotNetFramework()) {
+                nuget restore
+            } else {
+                $path = Join-Path $PSScriptRoot $component.path
+                PrintAction "Pushing location $($path)"
+                Push-Location $path
+                $configFile = Join-Path $PSScriptRoot NuGet.Config
+                dotnet restore --force --configfile $configFile            
+                Pop-Location
+            }
+            PathNugetFile -logout
+        }
     }
     PrintStep "Completed the SETUP step"
 }
