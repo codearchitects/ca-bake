@@ -170,10 +170,16 @@ Function CheckOptional() {
 Function AuthenticateNpm([switch] $logout) {
     $npmrcFile = ".npmrc"
     $npmrcFileOriginal = ".npmrc.original"
+    $step = [string]$(Get-PSCallStack)[1].FunctionName.ToLower()
     if ($logout) { Remove-Item $npmrcFile -Force; Copy-Item -Path $npmrcFileOriginal -Destination $npmrcFile -Force; Remove-Item $npmrcFileOriginal -Force; return }
     if (-not (Test-Path $npmrcFile)) { New-Item -Type File -Path $npmrcFile | Out-Null }
     Copy-Item -Path $npmrcFile -Destination $npmrcFileOriginal
-    ($Env:CA_BAKE_NPM_REGISTRY_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))) + (Get-Content $npmrcFile) | Out-File -Encoding UTF8 $npmrcFile
+    if ($step -eq "publish") {
+        ($Env:CA_BAKE_NPM_FEED_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))) + (Get-Content $npmrcFile) | Out-File -Encoding UTF8 $npmrcFile
+    }
+    else {
+        ($Env:CA_BAKE_NPM_REGISTRY_AND_AUTH_TOKEN -Split([regex]::escape("\r\n"))) + (Get-Content $npmrcFile) | Out-File -Encoding UTF8 $npmrcFile
+    }
 }
 
 # Classes
