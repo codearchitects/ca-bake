@@ -9,5 +9,5 @@ else {
     Install-Module -force -Scope CurrentUser psyaml -AllowClobber
     Write-Host "Installed psyaml module"
 }
-Invoke-WebRequest https://raw.githubusercontent.com/codearchitects/ca-bake/feature-v2/versions/2/bake.ps1 -OutFile "bake.ps1"
+Invoke-WebRequest https://raw.githubusercontent.com/codearchitects/ca-bake/master/versions/2/bake.ps1 -OutFile "bake.ps1"
 Remove-Item ".\bake-run.ps1" -Force -ErrorAction SilentlyContinue
