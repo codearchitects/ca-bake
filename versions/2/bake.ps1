@@ -140,6 +140,8 @@ Function LoadRecipe() {
         $component.packagePath = $item["packagePath"]
         $component.sourcePath = $item["sourcePath"]
         $component.package = $item["package"]
+        $component.buildWithDocker = $item["buildWithDocker"]
+        $component.exe = $item["exe"]
         $component.secrets = @()
         foreach ($items2 in $item["secrets"]) {
             $secretItem = New-Object Secret
@@ -194,6 +196,8 @@ Class Component {
     [string]$sourcePath
     [string]$package
     [string]$packagePath
+    [string]$buildWithDocker
+    [string]$exe
     [Secret[]]$secrets
 
     [boolean] IsDotNetPackage() {
@@ -211,7 +215,7 @@ Class Component {
     [boolean] IsDotNetApp() {
         return $this.type -eq "dotnet-app"
     }
-    
+
     [boolean] IsAspNetApp() {
         return $this.type -eq "aspnet-app"
     }
@@ -223,13 +227,21 @@ Class Component {
     [boolean] IsDotNetMigrationDbUp() {
         return $this.type -eq "dotnet-migration-dbup"
     }
-    
+
     [boolean] IsNpmPackage() {
         return $this.type -eq "npm-package"
     }
 
     [boolean] CodeQualityCheck() {
         return $this.codequality -eq $true
+    }
+
+    [boolean] CheckBuildWithDocker() {
+        return $this.buildWithDocker -eq $true
+    }
+
+    [boolean] CheckExe() {
+        return $this.exe -eq $true
     }
 }
 
@@ -321,18 +333,20 @@ Function Setup([Recipe] $recipe) {
     foreach ($component in $recipe.components) {
         if (CheckOptional) { continue }
         if ($component.IsNpmPackage()) { AuthenticateNpm; npm run setup; AuthenticateNpm -logout; continue }
-        if ($component.IsDotNetApp() -or $component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
+        if ($component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
         if ($component.IsDotNetFramework()) { nuget restore; continue }
-        PrintAction "Restoring component $($component.name)"
-        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
-        $path = Join-Path $PSScriptRoot $component.path
-        PrintAction "Pushing location $($path)"
-        Push-Location $path
-        PrintAction "Restoring $($component.name)..."
-        $configFile = Join-Path $PSScriptRoot NuGet.Config
-        dotnet restore --force --configfile $configFile
-        Pop-Location
-        PathNugetFile -logout
+        if(-not ($component.CheckBuildWithDocker())) {
+            PrintAction "Restoring component $($component.name)"
+            PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
+            $path = Join-Path $PSScriptRoot $component.path
+            PrintAction "Pushing location $($path)"
+            Push-Location $path
+            PrintAction "Restoring $($component.name)..."
+            $configFile = Join-Path $PSScriptRoot NuGet.Config
+            dotnet restore --force --configfile $configFile
+            Pop-Location
+            PathNugetFile -logout
+        }
     }
     PrintStep "Completed the SETUP step"
 }
@@ -354,7 +368,7 @@ Function Build([Recipe] $recipe) {
             PrintAction "Building $($vsProjectFile)..."
             $destination = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
             if (Test-path $destination) { Remove-item $destination -Force -Recurse -ErrorAction SilentlyContinue }
-            dotnet build $vsProjectFile --no-restore --configuration $buildProfile
+            dotnet build $vsProjectFile --no-restore --configuration $buildProfile -o $destination -f net
             Pop-Location
         }
         if ($component.IsDotNetPackage() -or $component.IsDotNetMigrationDbUp()) {
@@ -368,11 +382,21 @@ Function Build([Recipe] $recipe) {
             Pop-Location
         }
         if ($component.IsDotNetApp() -or $component.IsDotnetTestApp() -or $component.IsDotNetMigrationDbUp()) {
-            $DockerfilePath = Join-Path $path "Dockerfile"
-            PrintAction "Building $($component.name) in Docker..."
-            CheckDockerStart
-            $imageName = $($component.name).ToLower().Trim()
-            docker build -f $DockerfilePath . -t $imageName":"$version
+            if ($component.CheckBuildWithDocker()) {
+                $DockerfilePath = Join-Path $path "Dockerfile"
+                PrintAction "Building $($component.name) in Docker..."
+                CheckDockerStart
+                $imageName = $($component.name).ToLower().Trim()
+                docker build -f $DockerfilePath . -t $imageName":"$version
+            }
+            else {
+                PrintAction "Pushing location $($path)"
+                Push-Location $path
+                $vsProjectFile = "$($component.name).csproj"
+                PrintAction "Building $($vsProjectFile)..."
+                dotnet build $vsProjectFile --no-restore --configuration $buildProfile
+                Pop-Location
+            }
         }
         if ($component.IsAspNetApp()) {
             $DockerfilePath = Join-Path $path "Dockerfile"
@@ -460,14 +484,26 @@ Function Pack([Recipe] $recipe) {
             dotnet pack /p:Version="$version,PackageVersion=$version" --no-dependencies --force -c Release --output $distPath
             Pop-Location
         }
-        elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
+        elseif ($component.IsDotNetApp() -and -not($component.CheckBuildWithDocker())) {
+            PrintAction "Pushing location $($path)"
+            $vsProjectFile = "$($component.name).csproj"
+            Push-Location $path
+            $source = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+            if (Test-path $source) { Remove-item $source -Force -Recurse -ErrorAction SilentlyContinue }
+            dotnet publish $vsProjectFile --no-restore -o $source -r win10-x64
+            $destination = Join-Path $source ($component.name + "." + $version + ".zip")
+            if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
+            Compress-Archive -Path (Join-Path $source *) -CompressionLevel Optimal -DestinationPath $destination
+            Pop-Location
+        }
+        elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp() -or ($component.IsDotNetFramework() -and $component.CheckExe())) {
             $source = Join-Path $component.path @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
             if (-not (Test-path $source)) { return }
             $destination = Join-Path $source ($component.name + "." + $version + ".zip")
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path (Join-Path $source *) -CompressionLevel Optimal -DestinationPath $destination
         }
-        elseif ($component.IsDotNetFramework()) {
+        elseif ($component.IsDotNetFramework() -and -not ($component.CheckExe())) {
             PrintAction "Pushing location $($path)"
             Push-Location $path
             nuget spec "$($component.name).csproj" -Force
@@ -505,16 +541,18 @@ Function Publish([Recipe] $recipe) {
             Pop-Location
         }
         elseif ($component.IsDotNetApp() -or $component.IsDotNetTestApp()) {
-            SetupDocker
-            $imageName = $($component.name).ToLower().Trim()
-            $imageTag = "$($imageName):$($version)"
-            $imageFinal = "$Env:JFROG_DOCKER_LOCAL/$imageTag"
-            docker tag $imageTag $imageFinal
-            docker push $imageFinal
-            docker rmi $imageFinal $imageTag
-            SetupDocker -logout
+            if ($component.CheckBuildWithDocker()) {
+                SetupDocker
+                $imageName = $($component.name).ToLower().Trim()
+                $imageTag = "$($imageName):$($version)"
+                $imageFinal = "$Env:JFROG_DOCKER_LOCAL/$imageTag"
+                docker tag $imageTag $imageFinal
+                docker push $imageFinal
+                docker rmi $imageFinal $imageTag
+                SetupDocker -logout
+            }
         }
-        elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp()) {
+        elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp() -or ($component.IsDotNetApp() -and -not ($component.CheckBuildWithDocker()))) {
             $fileName = $component.name + "." + $version + ".zip"
             $file = Join-Path $component.path (Join-Path @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]  $fileName)
             if (-not (Test-path $file)) { return }
