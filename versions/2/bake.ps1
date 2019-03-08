@@ -334,10 +334,10 @@ Function Setup([Recipe] $recipe) {
         if (CheckOptional) { continue }
         if ($component.IsNpmPackage()) { AuthenticateNpm; npm run setup; AuthenticateNpm -logout; continue }
         if ($component.IsAspNetApp() -or $component.IsDotnetTestApp()) { continue }
-        if ($component.IsDotNetFramework()) { nuget restore; continue }
+        PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
+        if ($component.IsDotNetFramework()) { nuget restore; PathNugetFile -logout; continue }
         if(-not ($component.CheckBuildWithDocker())) {
             PrintAction "Restoring component $($component.name)"
-            PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
             $path = Join-Path $PSScriptRoot $component.path
             PrintAction "Pushing location $($path)"
             Push-Location $path
@@ -345,8 +345,8 @@ Function Setup([Recipe] $recipe) {
             $configFile = Join-Path $PSScriptRoot NuGet.Config
             dotnet restore --force --configfile $configFile
             Pop-Location
-            PathNugetFile -logout
         }
+        PathNugetFile -logout
     }
     PrintStep "Completed the SETUP step"
 }
