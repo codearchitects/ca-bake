@@ -527,7 +527,7 @@ Function Publish([Recipe] $recipe) {
         if ($component.IsNpmPackage()) {
             Push-Location $distPath
             AuthenticateNpm
-            npm publish
+            npm publish --loglevel=error
             AuthenticateNpm -logout
             Pop-Location
         }
