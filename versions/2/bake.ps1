@@ -473,7 +473,7 @@ Function Pack([Recipe] $recipe) {
         if ($component.IsNpmPackage()) {
             $packageFile = "package.json"
             Push-Location $distPath
-            (Get-Content -path $packageFile) | % { $_ -Replace '"version": "0.0.0"', ('"version": "'+$version+'"') } | % { $_ -Replace '"version":"0.0.0"', ('"version":"'+$version+'"') } | Out-File -Encoding UTF8 $packageFile
+            (Get-Content -path $packageFile) | % { $_ -Replace '"version": "0.0.0"', ('"version": "'+$version+'"') } | % { $_ -Replace '"version":"0.0.0"', ('"version":"'+$version+'"') } | Set-Content $packageFile
             Pop-Location
             continue
         }
