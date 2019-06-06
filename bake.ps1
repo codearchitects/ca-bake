@@ -508,7 +508,7 @@ Function Publish([Recipe] $recipe) {
             dotnet nuget push $package -k $recipe.GetNugetFeedApiKey() -s $source
             Pop-Location
         }
-        elseif ($component.IsDotNetApp() -or $component.IsDotNetTestApp()) {
+        elseif (($component.IsDotNetApp() -or $component.IsDotNetTestApp()) -and $env:BAKE_PUBLISH_DOCKER_ARTIFACT -ne "false") {
             SetupDocker
             $imageName = $($component.name).ToLower().Trim()
             $imageTag = "$($imageName):$($version)"
