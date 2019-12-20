@@ -490,7 +490,7 @@ Function Pack([Recipe] $recipe) {
             Push-Location $path
             $source = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
             if (Test-path $source) { Remove-item $source -Force -Recurse -ErrorAction SilentlyContinue }
-            dotnet publish $vsProjectFile --no-restore -o $source -r win10-x64
+            dotnet publish $vsProjectFile --no-restore -o $source
             $destination = Join-Path $source ($component.name + "." + $version + ".zip")
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path (Join-Path $source *) -CompressionLevel Optimal -DestinationPath $destination
