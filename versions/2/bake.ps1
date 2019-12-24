@@ -343,7 +343,12 @@ Function Setup([Recipe] $recipe) {
             Push-Location $path
             PrintAction "Restoring $($component.name)..."
             $configFile = Join-Path $PSScriptRoot NuGet.Config
-            dotnet restore --force --configfile $configFile
+            if ($component.IsDotNetApp()) {
+                dotnet restore --force --configfile $configFile -r win-x64
+            }
+            else {
+                dotnet restore --force --configfile $configFile
+            }
             Pop-Location
         }
         PathNugetFile -logout
@@ -394,7 +399,7 @@ Function Build([Recipe] $recipe) {
                 Push-Location $path
                 $vsProjectFile = "$($component.name).csproj"
                 PrintAction "Building $($vsProjectFile)..."
-                dotnet build $vsProjectFile --no-restore --configuration $buildProfile
+                dotnet build $vsProjectFile --no-restore --configuration $buildProfile -r win-x64
                 Pop-Location
             }
         }
@@ -470,6 +475,7 @@ Function Pack([Recipe] $recipe) {
         $version = $recipe.GetVersion()
         $path = Join-Path $PSScriptRoot $component.path
         $distPath = Join-Path $PSScriptRoot @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
+        $buildProfile = @{$true = $component.buildProfile; $false = "Release"}[(-not ([string]::IsNullOrEmpty($component.buildProfile)))]
         if ($component.IsNpmPackage()) {
             $packageFile = "package.json"
             Push-Location $distPath
@@ -485,16 +491,18 @@ Function Pack([Recipe] $recipe) {
             Pop-Location
         }
         elseif ($component.IsDotNetApp() -and -not($component.CheckBuildWithDocker())) {
+            PathNugetFile "NuGet.Config" "nugetfeed" $recipe.GetNugetUsername() $recipe.GetNugetPassword()
             PrintAction "Pushing location $($path)"
             $vsProjectFile = "$($component.name).csproj"
             Push-Location $path
             $source = @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
             if (Test-path $source) { Remove-item $source -Force -Recurse -ErrorAction SilentlyContinue }
-            dotnet publish $vsProjectFile --no-restore -o $source
+            dotnet publish $vsProjectFile -o $source -r win-x64 --self-contained --configuration $buildProfile
             $destination = Join-Path $source ($component.name + "." + $version + ".zip")
             if (Test-path $destination) { Remove-item $destination -Force -ErrorAction SilentlyContinue }
             Compress-Archive -Path (Join-Path $source *) -CompressionLevel Optimal -DestinationPath $destination
             Pop-Location
+            PathNugetFile -logout
         }
         elseif ($component.IsDotNetMigrationDbUp() -or $component.IsAspNetApp() -or ($component.IsDotNetFramework() -and $component.CheckExe())) {
             $source = Join-Path $component.path @{$true = $component.packageDist; $false = "dist"}[(-not ([string]::IsNullOrEmpty($component.packageDist)))]
